@@ -287,7 +287,7 @@ export const RouteFinder: React.FC = () => {
             </div>
           </header>
 
-          {!collapsed && <>
+          <div className={collapsed ? 'hidden' : ''}>
             <div className="grid grid-cols-4 border-b border-slate-200" role="group" aria-label={isFilipino ? 'Paraan ng biyahe' : 'Travel mode'}>
               {modes.map((mode) => <button key={mode.id} type="button" onClick={() => selectTravelMode(mode.id)} aria-pressed={travelMode === mode.id} className={`flex min-h-11 min-w-0 flex-col items-center justify-center gap-1 border-r border-[#dfe6e1] py-2 text-[11px] font-bold last:border-r-0 sm:flex-row ${travelMode === mode.id ? 'bg-[#dce9e2] text-[#173a37]' : 'text-slate-600 hover:bg-[#f4f7f4]'}`}>{mode.icon}<span>{isFilipino && mode.id === 'walking' ? 'Lakad' : isFilipino && mode.id === 'bicycling' ? 'Bisikleta' : isFilipino && mode.id === 'driving' ? 'Sasakyan' : mode.label}</span></button>)}
             </div>
@@ -309,7 +309,7 @@ export const RouteFinder: React.FC = () => {
               {(travelMode === 'driving' || travelMode === 'motorcycle') && <div className="flex flex-wrap gap-x-4 gap-y-2"><a href={googleMapsUrl.toString()} target="_blank" rel="noreferrer" className="inline-flex items-center gap-1.5 text-xs font-bold text-teal-900 underline underline-offset-2">{isFilipino ? 'Buksan ang navigation' : 'Open navigation'} <ExternalLink className="h-3.5 w-3.5" /></a><a href={wazeUrl} target="_blank" rel="noreferrer" className="inline-flex items-center gap-1.5 text-xs font-bold text-teal-900 underline underline-offset-2">Open in Waze <ExternalLink className="h-3.5 w-3.5" /></a></div>}
               <p className="flex items-start gap-1 text-[10px] leading-relaxed text-slate-500"><MapPin className="mt-0.5 h-3 w-3 shrink-0" />{isFilipino ? 'Mga mapa at ruta mula sa OpenStreetMap. Ibinabahagi lamang ang lokasyon sa browser mo.' : 'Map and route data by OpenStreetMap. Your location stays in this browser.'}</p>
             </div>
-          </>}
+          </div>
         </aside>
       </div>
     </section>

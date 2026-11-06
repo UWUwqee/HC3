@@ -9,6 +9,8 @@ export const PublicInformation: React.FC = () => {
   const updates = siteContent.news.slice(0, 3);
   const outreach = siteContent.outreach.slice(0, 3);
   const settings = siteContent.settings;
+  const holidayAdvisory = (isFilipino ? settings.holidayAdvisoryFil : settings.holidayAdvisory).trim()
+    || (isFilipino ? 'Tiyakin ang operasyon ng klinika bago bumisita tuwing holiday.' : 'Verify clinic operations before visiting on holidays.');
   const clinicDuty = isFilipino ? settings.clinicHoursFil : settings.clinicHours;
   const [clinicDutyLabel, ...clinicDutyScheduleParts] = clinicDuty.split(':');
   const clinicDutySchedule = clinicDutyScheduleParts.join(':').trim();
@@ -44,7 +46,7 @@ export const PublicInformation: React.FC = () => {
 
         <div className="holiday-advisory" role="note">
           <AlertTriangle className="h-5 w-5 shrink-0 text-amber-700" aria-hidden="true" />
-          <div><strong>{isFilipino ? 'Pabatid sa holiday:' : 'Holiday advisory:'}</strong> {isFilipino ? settings.holidayAdvisoryFil : settings.holidayAdvisory}</div>
+          <div><strong>{isFilipino ? 'Pabatid sa holiday:' : 'Holiday advisory:'}</strong> {holidayAdvisory}</div>
         </div>
 
         <div className="grid gap-3 md:grid-cols-2">

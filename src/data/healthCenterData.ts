@@ -16,8 +16,8 @@ export const DEFAULT_CLINIC_PUBLIC_SETTINGS: ClinicPublicSettings = {
   contactEmail: '',
   emergencyPhone: '',
   emergencyPhoneFil: '',
-  holidayAdvisory: '',
-  holidayAdvisoryFil: '',
+  holidayAdvisory: 'Verify clinic operations before visiting on holidays.',
+  holidayAdvisoryFil: 'Tiyakin ang operasyon ng klinika bago bumisita tuwing holiday.',
 };
 
 export const SERVICES_DATA: ServiceDetail[] = MASIKAP_SERVICES.map((service) => ({
