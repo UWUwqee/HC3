@@ -9,6 +9,7 @@ import vaccinationImage from '../assets/images/VACCINATION.jpg';
 const services = [
   {
     id: 'consultation',
+    category: 'checkup',
     title: 'Consultation',
     titleFil: 'Konsultasyon',
     image: checkupImage,
@@ -16,6 +17,7 @@ const services = [
   },
   {
     id: 'maternity',
+    category: 'maternity',
     title: 'Prenatal and postnatal care',
     titleFil: 'Prenatal at postnatal',
     image: maternityImage,
@@ -23,6 +25,7 @@ const services = [
   },
   {
     id: 'family-planning',
+    category: 'family_planning',
     title: 'Family planning',
     titleFil: 'Family planning',
     image: familyPlanningImage,
@@ -30,6 +33,7 @@ const services = [
   },
   {
     id: 'vaccination',
+    category: 'vaccination',
     title: 'Vaccination',
     titleFil: 'Bakuna',
     image: vaccinationImage,
@@ -38,7 +42,7 @@ const services = [
 ];
 
 export const ServicesSection: React.FC = () => {
-  const { language } = useHealthCenter();
+  const { language, siteContent } = useHealthCenter();
   const isFilipino = language === 'fil';
 
   return (
@@ -52,13 +56,15 @@ export const ServicesSection: React.FC = () => {
         </div>
 
         <div className="grid gap-3 sm:grid-cols-2 xl:grid-cols-4">
-          {services.map((service) => (
+          {siteContent.services.map((service) => {
+            const visual = services.find((item) => item.category === service.category);
+            return (
             <article key={service.id} className="site-card overflow-hidden transition-transform duration-200 hover:-translate-y-0.5">
               <div className="overflow-hidden">
-                {service.image ? (
+                {visual?.image ? (
                   <img
-                    src={service.image}
-                    alt={service.imageAlt}
+                    src={visual.image}
+                    alt={visual.imageAlt}
                     loading="lazy"
                     decoding="async"
                     className="aspect-[16/10] w-full object-cover"
@@ -75,7 +81,9 @@ export const ServicesSection: React.FC = () => {
                 </h2>
               </div>
             </article>
-          ))}
+            );
+          })}
+          {siteContent.services.length === 0 && <p className="text-sm text-[#6b7280]">{isFilipino ? 'Walang kasalukuyang nakalistang serbisyo.' : 'No services are currently listed.'}</p>}
         </div>
       </div>
     </section>

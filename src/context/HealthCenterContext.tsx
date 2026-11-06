@@ -110,6 +110,7 @@ interface HealthCenterContextValue {
   activeSection: string;
   setActiveSection: (section: string) => void;
   siteContent: PublicSiteContent;
+  siteContentError: string;
   clinicOpen: boolean | null;
   clinicStatusError: string;
   appointmentRequestAvailability: AppointmentRequestAvailability;
@@ -158,6 +159,7 @@ export const HealthCenterProvider: React.FC<{ children: ReactNode }> = ({ childr
   ));
   const [activeSection, setActiveSectionState] = useState('overview');
   const [siteContent, setSiteContent] = useState(DEFAULT_SITE_CONTENT);
+  const [siteContentError, setSiteContentError] = useState('');
   const [clinicOpen, setClinicOpen] = useState<boolean | null>(null);
   const [clinicStatusError, setClinicStatusError] = useState('');
   const [appointmentRequestAvailability, setAppointmentRequestAvailability] = useState<AppointmentRequestAvailability>('checking');
@@ -208,14 +210,17 @@ export const HealthCenterProvider: React.FC<{ children: ReactNode }> = ({ childr
         if (!response.ok) throw new Error('Public clinic information could not be loaded.');
         const data = await response.json() as Partial<PublicSiteContent>;
         if (!active) return;
-        setSiteContent({
+        setSiteContentError('');
+        const nextContent = {
           services: Array.isArray(data.services) ? data.services : DEFAULT_SITE_CONTENT.services,
           news: Array.isArray(data.news) ? data.news : [],
           outreach: Array.isArray(data.outreach) ? data.outreach : [],
           settings: data.settings ? { ...DEFAULT_CLINIC_PUBLIC_SETTINGS, ...data.settings } : DEFAULT_CLINIC_PUBLIC_SETTINGS,
-        });
+        };
+        setSiteContent((current) => JSON.stringify(current) === JSON.stringify(nextContent) ? current : nextContent);
       } catch {
-        if (active) setSiteContent(DEFAULT_SITE_CONTENT);
+        if (active) setSiteContentError('Clinic information could not be refreshed.');
+        return;
       }
     };
 
@@ -273,6 +278,7 @@ export const HealthCenterProvider: React.FC<{ children: ReactNode }> = ({ childr
     void loadAppointments();
     void loadUnreadMessages();
     const timer = window.setInterval(() => {
+      void loadSiteContent();
       void loadClinicStatus();
       void loadAppointments();
       void loadUnreadMessages();
@@ -306,6 +312,7 @@ export const HealthCenterProvider: React.FC<{ children: ReactNode }> = ({ childr
       activeSection,
       setActiveSection,
       siteContent,
+      siteContentError,
       clinicOpen,
       clinicStatusError,
       appointmentRequestAvailability,

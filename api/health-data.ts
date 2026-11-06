@@ -2,8 +2,10 @@ import 'dotenv/config';
 import { createClient } from '@libsql/client';
 import { randomUUID } from 'node:crypto';
 import type { IncomingMessage, ServerResponse } from 'node:http';
+import { applicationDefault, cert, getApps, initializeApp } from 'firebase-admin/app';
+import { getAuth } from 'firebase-admin/auth';
 
-type ApiRequest = IncomingMessage & { body?: unknown };
+type ApiRequest = IncomingMessage & { body?: unknown; headers: IncomingMessage['headers'] & { authorization?: string } };
 type ApiResponse = ServerResponse & {
   status: (code: number) => ApiResponse;
   json: (body: unknown) => void;
@@ -21,6 +23,36 @@ function getDatabase() {
 
 function text(value: unknown, limit: number) {
   return typeof value === 'string' ? value.trim().slice(0, limit) : '';
+}
+
+function getFirebaseAdmin() {
+  if (getApps().length > 0) return getAuth();
+  const serviceAccountJson = process.env.FIREBASE_SERVICE_ACCOUNT_JSON?.trim();
+  let credential;
+  if (serviceAccountJson) {
+    try {
+      credential = cert(JSON.parse(serviceAccountJson));
+    } catch {
+      throw new Error('FIREBASE_SERVICE_ACCOUNT_JSON is not valid JSON or is missing service-account fields.');
+    }
+  } else {
+    credential = applicationDefault();
+  }
+  initializeApp({ credential });
+  return getAuth();
+}
+
+async function authenticate(request: ApiRequest) {
+  const authorization = text(request.headers.authorization, 2000);
+  const token = authorization.startsWith('Bearer ') ? authorization.slice(7) : '';
+  if (!token) return null;
+  try {
+    const decoded = await getFirebaseAdmin().verifyIdToken(token);
+    return decoded.uid;
+  } catch (error) {
+    console.error('Health-data Firebase ID token verification failed:', error);
+    return null;
+  }
 }
 
 async function initializeDatabase(db: ReturnType<typeof createClient>) {
@@ -97,6 +129,13 @@ async function initializeDatabase(db: ReturnType<typeof createClient>) {
 
 export default async function handler(request: ApiRequest, response: ApiResponse) {
   response.setHeader('Cache-Control', 'no-store');
+  if (request.method !== 'GET' && request.method !== 'POST') {
+    response.setHeader('Allow', 'GET, POST');
+    return response.status(405).json({ error: 'Method not allowed.' });
+  }
+  const ownerUid = await authenticate(request);
+  if (!ownerUid) return response.status(401).json({ error: 'A valid Firebase sign-in is required.' });
+
   const db = getDatabase();
   if (!db) return response.status(503).json({ error: 'Turso database is not configured.' });
 
@@ -105,9 +144,6 @@ export default async function handler(request: ApiRequest, response: ApiResponse
   } catch {
     return response.status(500).json({ error: 'Database initialization failed.' });
   }
-
-  const ownerUid = text(request.headers['x-user-id'], 128);
-  if (!ownerUid) return response.status(401).json({ error: 'Firebase user ID is required.' });
 
   if (request.method === 'GET') {
     const resource = text(request.headers['x-resource'], 40);

@@ -44,8 +44,9 @@ export const OutreachBookingModal: React.FC<{ user: User }> = ({ user }) => {
     clinicOpen,
     markAppointmentRequestPending,
     selectedProgramForBooking,
+    siteContent,
   } = useHealthCenter();
-  const services = MASIKAP_SERVICES;
+  const services = siteContent.services;
   const [formStep, setFormStep] = useState<1 | 2>(1);
   const formRef = useRef<HTMLFormElement>(null);
   const [serviceId, setServiceId] = useState('checkup');

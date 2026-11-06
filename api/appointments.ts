@@ -4,7 +4,8 @@ import { randomBytes, randomUUID } from 'node:crypto';
 import type { IncomingMessage, ServerResponse } from 'node:http';
 import { applicationDefault, cert, getApps, initializeApp } from 'firebase-admin/app';
 import { getAuth } from 'firebase-admin/auth';
-import { COVERAGE_AREAS, MASIKAP_SERVICES } from '../src/data/masikapClinicInfo.ts';
+import { COVERAGE_AREAS } from '../src/data/masikapClinicInfo.ts';
+import { ensureSiteContent, getContentDatabase } from './site-content-store.ts';
 
 type ApiRequest = IncomingMessage & { body?: unknown; headers: IncomingMessage['headers'] & { authorization?: string } };
 type ApiResponse = ServerResponse & {
@@ -215,8 +216,7 @@ export default async function handler(request: ApiRequest, response: ApiResponse
   if (phoneDigits.length < 7) return response.status(400).json({ error: 'Enter a contact number with at least 7 digits.' });
   if (email && !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email)) return response.status(400).json({ error: 'Enter a valid email address or leave it blank.' });
   if (!zones.has(zone)) return response.status(400).json({ error: 'Select a valid zone or barangay.' });
-  const selectedService = MASIKAP_SERVICES.find((service) => service.id === serviceId);
-  if (!selectedService) return response.status(400).json({ error: 'Select a service offered by Masikap Health Center.' });
+  if (!/^[a-zA-Z0-9_-]{1,40}$/.test(serviceId)) return response.status(400).json({ error: 'Select a valid service.' });
   if (!dateIsValid || preferredDate < today) return response.status(400).json({ error: 'Choose a valid appointment date that is today or later.' });
   if (!preferredTimes.has(preferredTime)) return response.status(400).json({ error: 'Select a valid time slot.' });
   if (body.privacyConsent !== true) return response.status(400).json({ error: 'Please agree to the contact and privacy consent.' });
@@ -230,7 +230,17 @@ export default async function handler(request: ApiRequest, response: ApiResponse
 
   try {
     await ensureAppointmentTable(db);
-    const serviceName = selectedService.title;
+    const contentDb = getContentDatabase();
+    if (!contentDb) return response.status(503).json({ error: 'Appointment requests are temporarily unavailable.' });
+    await ensureSiteContent(contentDb);
+    const serviceResult = await contentDb.execute({
+      sql: `SELECT content_json FROM public_site_content
+            WHERE content_type = 'service' AND content_id = ? AND published = 1 AND deleted = 0`,
+      args: [serviceId],
+    });
+    if (!serviceResult.rows[0]) return response.status(400).json({ error: 'This service is no longer available for appointment requests.' });
+    const service = JSON.parse(String(serviceResult.rows[0].content_json)) as { title?: unknown };
+    const serviceName = typeof service.title === 'string' ? service.title.trim().slice(0, 160) : '';
     if (!serviceName) return response.status(400).json({ error: 'The selected service is not configured for appointment requests.' });
     const clinicStatus = await db.execute("SELECT setting_value FROM clinic_settings WHERE setting_key = 'clinic_open'");
     if (clinicStatus.rows[0]?.setting_value !== '1') {
