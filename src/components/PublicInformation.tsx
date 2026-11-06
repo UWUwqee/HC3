@@ -9,6 +9,14 @@ export const PublicInformation: React.FC = () => {
   const updates = siteContent.news.slice(0, 3);
   const outreach = siteContent.outreach.slice(0, 3);
   const settings = siteContent.settings;
+  const clinicDuty = isFilipino ? settings.clinicHoursFil : settings.clinicHours;
+  const [clinicDutyLabel, ...clinicDutyScheduleParts] = clinicDuty.split(':');
+  const clinicDutySchedule = clinicDutyScheduleParts.join(':').trim();
+  const additionalClinicHours = [
+    isFilipino ? settings.doctorHoursFil : settings.doctorHours,
+    isFilipino ? settings.xrayHoursFil : settings.xrayHours,
+    isFilipino ? settings.dentalHoursFil : settings.dentalHours,
+  ].filter((hours) => hours.trim());
   const [viewingImage, setViewingImage] = useState<{ url: string; alt: string } | null>(null);
 
   useEffect(() => {
@@ -42,12 +50,10 @@ export const PublicInformation: React.FC = () => {
         <div className="grid gap-3 md:grid-cols-2">
           <section className="site-card p-4">
             <h3 className="mb-3 flex items-center gap-2 text-base font-bold text-[#0f4d3c]"><Clock3 className="h-5 w-5 text-[#2c7a5f]" />{isFilipino ? 'Oras ng klinika' : 'Clinic hours'}</h3>
-            <ul className="bullet-list text-sm text-[#374151]">
-              <li><strong>{isFilipino ? settings.clinicHoursFil : settings.clinicHours}</strong></li>
-              <li>{isFilipino ? settings.doctorHoursFil : settings.doctorHours}</li>
-              <li>{isFilipino ? settings.xrayHoursFil : settings.xrayHours}</li>
-              <li>{isFilipino ? settings.dentalHoursFil : settings.dentalHours}</li>
-            </ul>
+            <div className="space-y-1 text-xs text-[#374151]">
+              <p><strong className="text-sm font-bold uppercase text-[#0f4d3c]">{clinicDutyLabel}</strong>{clinicDutySchedule ? `: ${clinicDutySchedule}` : ''}</p>
+              {additionalClinicHours.map((hours, index) => <p key={`${index}-${hours}`}>{hours}</p>)}
+            </div>
           </section>
 
           <section className="site-card p-4">
@@ -83,6 +89,10 @@ export const PublicInformation: React.FC = () => {
                 {outreach.map((program) => <li key={program.id}><strong>{isFilipino ? program.titleFil : program.title}</strong><span className="mt-1 flex items-start gap-1.5 text-xs text-[#6b7280]"><MapPin className="mt-0.5 h-3.5 w-3.5 shrink-0" />{program.location}</span></li>)}
               </ul>
             ) : <p className="text-sm text-[#6b7280]">{isFilipino ? 'Wala pang naka-iskedyul na outreach.' : 'No outreach programs are currently scheduled.'}</p>}
+            <div className="mt-3 space-y-3 border-t border-[#e7eee9] pt-3 text-xs leading-relaxed text-[#4b5563]">
+              <p><strong className="text-[#0f4d3c]">{isFilipino ? 'Duty ng klinika:' : 'Clinic duty:'}</strong> {isFilipino ? 'Lunes-Biyernes, 7:00 AM-4:00 PM.' : 'Monday-Friday, 7:00 AM-4:00 PM.'}</p>
+              <p><strong className="text-[#0f4d3c]">{isFilipino ? 'PhilHealth YAKAP:' : 'PhilHealth YAKAP:'}</strong> {isFilipino ? 'Maaaring makatanggap ang kwalipikadong miyembro ng hanggang PHP 20,000 na benepisyo. Maaaring may libreng gamot kung available sa health center.' : 'Eligible members may receive up to PHP 20,000 in benefits. Free medicines may be available at the health center.'}</p>
+            </div>
           </section>
         </div>
       </div>
