@@ -128,8 +128,8 @@ export const UserAppointmentChat: React.FC<{ user: User }> = ({ user }) => {
   if (!messagesOpen) return null;
 
   return (
-    <div className="fixed inset-0 z-50 flex items-end justify-center bg-slate-950/50 p-0 sm:items-center sm:p-4" onMouseDown={(event) => { if (event.target === event.currentTarget) setMessagesOpen(false); }}>
-      <section role="dialog" aria-modal="true" aria-labelledby="patient-messages-title" className="flex max-h-[92dvh] w-full max-w-2xl flex-col bg-white shadow-2xl sm:max-h-[85dvh]">
+    <div className="fixed inset-0 z-50 flex items-end justify-center bg-slate-950/50 p-2 pt-[max(0.5rem,env(safe-area-inset-top))] pb-[max(0.5rem,env(safe-area-inset-bottom))] sm:items-center sm:p-4" onMouseDown={(event) => { if (event.target === event.currentTarget) setMessagesOpen(false); }}>
+      <section role="dialog" aria-modal="true" aria-labelledby="patient-messages-title" className="flex max-h-[calc(100dvh-1rem-env(safe-area-inset-top)-env(safe-area-inset-bottom))] w-full max-w-2xl flex-col bg-white shadow-2xl sm:max-h-[85dvh]">
         <header className="flex items-center justify-between gap-4 border-b border-[#dce7e1] px-4 py-4 sm:px-6">
           <div className="flex items-center gap-3">
             <MessageCircle className="h-5 w-5 text-[#17645c]" aria-hidden="true" />

@@ -378,7 +378,7 @@ export const AdminPanel: React.FC = () => {
         )}
         </div>
       </div>
-      {error && <div role="alert" className="fixed bottom-4 left-3 right-3 z-50 mx-auto w-fit max-w-lg border border-rose-200 bg-white px-4 py-3 text-sm text-rose-800 shadow-lg sm:left-1/2 sm:right-auto sm:-translate-x-1/2">{error}</div>}
+      {error && <div role="alert" className="fixed bottom-[max(0.75rem,env(safe-area-inset-bottom))] left-3 right-3 z-50 mx-auto w-fit max-w-lg border border-rose-200 bg-white px-4 py-3 text-sm text-rose-800 shadow-lg sm:bottom-4 sm:left-1/2 sm:right-auto sm:-translate-x-1/2">{error}</div>}
     </main>
   );
 };

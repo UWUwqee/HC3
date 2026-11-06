@@ -68,7 +68,7 @@ const AppContent: React.FC<{ user: User }> = ({ user }) => {
       <OutreachBookingModal user={user} />
 
       {notificationToast && (
-        <div className="fixed bottom-5 right-5 z-50 bg-[#0f4d3c] text-white px-4 py-3 rounded-md shadow-lg border border-white/10 text-sm font-semibold flex items-center gap-2 max-w-sm animate-fade-in">
+        <div className="fixed bottom-[max(0.75rem,env(safe-area-inset-bottom))] left-3 right-3 z-50 flex max-w-sm items-center gap-2 rounded-md border border-white/10 bg-[#0f4d3c] px-4 py-3 text-sm font-semibold text-white shadow-lg animate-fade-in sm:bottom-5 sm:left-auto sm:right-5">
           <CheckCircle2 className="w-4 h-4 text-teal-400 shrink-0" />
           <span>{notificationToast}</span>
         </div>
