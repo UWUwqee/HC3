@@ -1,5 +1,6 @@
 import type { IncomingMessage, ServerResponse } from 'node:http';
 import { getContentDatabase, readSiteContent } from './site-content-store.js';
+import { MASIKAP_SERVICES } from '../src/data/masikapClinicInfo.js';
 
 type ApiRequest = IncomingMessage;
 type ApiResponse = ServerResponse & {
@@ -15,9 +16,9 @@ export default async function handler(request: ApiRequest, response: ApiResponse
   }
   const db = getContentDatabase();
   if (!db) {
-    const { DEFAULT_CLINIC_PUBLIC_SETTINGS, NEWS_UPDATES, OUTREACH_PROGRAMS, SERVICES_DATA } = await import('../src/data/healthCenterData.js');
+    const { DEFAULT_CLINIC_PUBLIC_SETTINGS, NEWS_UPDATES, OUTREACH_PROGRAMS } = await import('../src/data/healthCenterData.js');
     return response.status(200).json({
-      services: SERVICES_DATA,
+      services: MASIKAP_SERVICES,
       news: NEWS_UPDATES,
       outreach: OUTREACH_PROGRAMS,
       settings: { ...DEFAULT_CLINIC_PUBLIC_SETTINGS },
@@ -25,12 +26,12 @@ export default async function handler(request: ApiRequest, response: ApiResponse
   }
   try {
     const { content } = await readSiteContent(db);
-    return response.status(200).json(content);
+    return response.status(200).json({ ...content, services: MASIKAP_SERVICES });
   } catch (error) {
     console.error('Public site content could not be loaded:', error);
-    const { DEFAULT_CLINIC_PUBLIC_SETTINGS, NEWS_UPDATES, OUTREACH_PROGRAMS, SERVICES_DATA } = await import('../src/data/healthCenterData.js');
+    const { DEFAULT_CLINIC_PUBLIC_SETTINGS, NEWS_UPDATES, OUTREACH_PROGRAMS } = await import('../src/data/healthCenterData.js');
     return response.status(200).json({
-      services: SERVICES_DATA,
+      services: MASIKAP_SERVICES,
       news: NEWS_UPDATES,
       outreach: OUTREACH_PROGRAMS,
       settings: { ...DEFAULT_CLINIC_PUBLIC_SETTINGS },

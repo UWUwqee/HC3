@@ -1,6 +1,7 @@
 import React, { useEffect, useState } from 'react';
 import { CalendarDays, Clock3, MapPin } from 'lucide-react';
 import { useHealthCenter } from '../context/HealthCenterContext';
+import { CLINIC_ADDRESS } from '../data/masikapClinicInfo';
 
 interface ScheduleSlot {
   date: string;
@@ -93,7 +94,7 @@ export const AppointmentSchedule: React.FC = () => {
               <h3 className="text-sm font-bold text-[#0f4d3c]">{isFilipino ? 'Mabilisang impormasyon' : 'Quick information'}</h3>
               <dl className="mt-4 space-y-4 text-sm">
                 <div><dt className="flex items-center gap-2 font-semibold text-[#374151]"><Clock3 className="h-4 w-4 text-[#2c7a5f]" />{isFilipino ? 'Oras ng klinika' : 'Clinic hours'}</dt><dd className="mt-1 pl-6 text-[#6b7280]">{isFilipino ? settings.clinicHoursFil : settings.clinicHours}</dd></div>
-                <div><dt className="flex items-center gap-2 font-semibold text-[#374151]"><MapPin className="h-4 w-4 text-[#2c7a5f]" />{isFilipino ? 'Lokasyon' : 'Location'}</dt><dd className="mt-1 pl-6 text-[#6b7280]">{isFilipino ? settings.clinicAddressFil : settings.clinicAddress}</dd></div>
+                <div><dt className="flex items-center gap-2 font-semibold text-[#374151]"><MapPin className="h-4 w-4 text-[#2c7a5f]" />{isFilipino ? 'Lokasyon' : 'Location'}</dt><dd className="mt-1 pl-6 text-[#6b7280]">{CLINIC_ADDRESS}</dd></div>
               </dl>
             </aside>
           </div>
@@ -119,7 +120,7 @@ export const AppointmentSchedule: React.FC = () => {
             </div>
             <div className="mt-5 flex flex-wrap items-start gap-x-8 gap-y-3 border-t border-[#dce7e1] pt-4 text-xs text-[#6b7280]">
               <span className="flex items-start gap-2"><Clock3 className="mt-0.5 h-4 w-4 text-[#2c7a5f]" />{isFilipino ? settings.clinicHoursFil : settings.clinicHours}</span>
-              <span className="flex items-start gap-2"><MapPin className="mt-0.5 h-4 w-4 text-[#2c7a5f]" />{isFilipino ? settings.clinicAddressFil : settings.clinicAddress}</span>
+              <span className="flex items-start gap-2"><MapPin className="mt-0.5 h-4 w-4 text-[#2c7a5f]" />{CLINIC_ADDRESS}</span>
             </div>
           </>
         )}

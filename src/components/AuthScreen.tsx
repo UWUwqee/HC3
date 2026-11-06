@@ -1,7 +1,6 @@
 import React, { FormEvent, useState } from 'react';
 import { createUserWithEmailAndPassword, fetchSignInMethodsForEmail, signInAnonymously, signInWithEmailAndPassword, updateProfile } from 'firebase/auth';
 import { ArrowRight, LockKeyhole, UserRound } from 'lucide-react';
-import centerPhoto from '../assets/images/QUINTIN.png';
 import { auth } from '../firebase';
 
 export const AuthScreen: React.FC = () => {
@@ -123,10 +122,8 @@ export const AuthScreen: React.FC = () => {
       <section className="mx-auto w-full max-w-md border border-[#d9e1dc] bg-[#fbfcfa] shadow-[0_18px_50px_rgba(23,58,55,0.12)]">
         <div className="border-b border-[#dfe6e1] px-6 py-5 sm:px-8">
           <div className="flex items-center gap-3">
-            <img src={centerPhoto} alt="Quintin De Borja Health Center" className="h-12 w-12 rounded-full border border-[#dfe6e1] object-cover" />
             <div>
-              <div className="text-sm font-bold">Quintin De Borja</div>
-              <div className="mt-0.5 text-xs text-[#66736f]">Health Center</div>
+              <div className="text-sm font-bold">Masikap Health Center</div>
             </div>
           </div>
         </div>

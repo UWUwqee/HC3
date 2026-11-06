@@ -1,11 +1,11 @@
 import React from 'react';
 import { useHealthCenter } from '../context/HealthCenterContext';
 import { CalendarDays, ArrowDown, Clock3, MapPin } from 'lucide-react';
-import centerPhoto from "../assets/images/QUINTIN.png";
+import { CLINIC_ADDRESS } from '../data/masikapClinicInfo';
+import centerPhoto from '../assets/images/MASIKAP.png';
 
 export const Hero: React.FC = () => {
   const { language, setActiveSection, setBookingModalOpen, clinicOpen, clinicStatusError, appointmentRequestAvailability, siteContent } = useHealthCenter();
-  const clinicAddress = language === 'fil' ? siteContent.settings.clinicAddressFil : siteContent.settings.clinicAddress;
   const clinicHours = language === 'fil' ? siteContent.settings.clinicHoursFil : siteContent.settings.clinicHours;
   const bookingEnabled = clinicOpen === true && appointmentRequestAvailability === 'available';
 
@@ -17,13 +17,13 @@ export const Hero: React.FC = () => {
   return (
     <section id="overview" className="hero-section-enter bg-[#0f4d3c] text-white">
       <div className="relative min-h-[300px] sm:min-h-[340px] flex items-center overflow-hidden border-b border-white/10">
-        <img src={centerPhoto} alt="Quintin De Borja Health Center" className="absolute inset-0 w-full h-full object-cover object-center" />
+        <img src={centerPhoto} alt="Masikap Health Center exterior" className="absolute inset-0 h-full w-full object-cover object-center" />
         <div className="absolute inset-0 bg-[#0f4d3c]/88" />
         <div className="relative w-full max-w-7xl mx-auto px-5 sm:px-8 lg:px-12 py-12 sm:py-14">
           <div className="flex w-full flex-col gap-7 sm:flex-row sm:items-center sm:justify-between sm:gap-10">
           <div className="max-w-2xl">
             <h1 className="hero-enter max-w-xl text-3xl sm:text-4xl lg:text-[46px] font-bold leading-[1.08] text-white">
-              Quintin De Borja Health Center
+              Masikap Health Center
             </h1>
             <div className="hero-actions mt-7 flex flex-wrap gap-3">
               {bookingEnabled && <button onClick={() => setBookingModalOpen(true)} title="Request an appointment" className="inline-flex items-center gap-2 bg-white text-[#0f4d3c] px-5 py-3 text-sm font-bold rounded-sm border border-white hover:bg-[#eaf3ee] transition-colors">
@@ -33,7 +33,7 @@ export const Hero: React.FC = () => {
                 View services <ArrowDown className="w-4 h-4" />
               </button>
               <div className="min-w-0 max-w-[290px] space-y-1.5 text-xs leading-relaxed text-white/85 sm:ml-2">
-                <p className="flex items-start gap-2"><MapPin className="mt-0.5 h-3.5 w-3.5 shrink-0" /><span>{clinicAddress}</span></p>
+                <p className="flex items-start gap-2"><MapPin className="mt-0.5 h-3.5 w-3.5 shrink-0" /><span>{CLINIC_ADDRESS}</span></p>
                 <p className="flex items-start gap-2"><Clock3 className="mt-0.5 h-3.5 w-3.5 shrink-0" /><span>{clinicHours}</span></p>
               </div>
             </div>

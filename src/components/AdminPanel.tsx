@@ -4,7 +4,6 @@ import { CalendarDays, Check, CheckCircle2, ChevronLeft, Clock3, LockKeyhole, Me
 import { AdminCalendar, SlotSetting, SlotSettingsForm } from './AdminCalendar';
 import { AdminContentManager } from './AdminContentManager';
 import { AdminReports } from './AdminReports';
-import centerPhoto from '../assets/images/QUINTIN.png';
 
 interface AppointmentRow {
   id: string;
@@ -226,7 +225,6 @@ export const AdminPanel: React.FC = () => {
       <header className="border-b border-[#0b3f32] bg-[#0f4d3c] px-4 py-4 text-white sm:px-8 sm:py-5">
         <div className="mx-auto flex max-w-[1500px] items-center justify-between gap-2 sm:gap-4">
           <div className="flex min-w-0 items-center gap-2 sm:gap-3">
-            <img src={centerPhoto} alt="" className="h-10 w-10 shrink-0 rounded-full border border-white/25 object-cover sm:h-12 sm:w-12" />
             <div className="min-w-0"><div className="flex flex-wrap items-center gap-x-2 gap-y-0.5"><span className="text-[9px] font-bold uppercase tracking-[0.12em] text-white/70 sm:text-[11px] sm:tracking-[0.16em]">Health center staff</span><span className="border border-white/30 bg-white/10 px-1.5 py-0.5 text-[9px] font-extrabold tracking-wider text-white sm:px-2 sm:text-[10px]">ADMIN</span></div><h1 className="mt-0.5 truncate text-sm font-bold text-white sm:text-lg">Appointment management</h1></div>
           </div>
           <button type="button" onClick={() => void auth.signOut()} className="min-h-11 shrink-0 border border-white/30 px-3 py-2 text-xs font-bold text-white hover:bg-white/10 sm:px-4 sm:text-sm">Sign out</button>

@@ -1,5 +1,15 @@
 import React from 'react';
 import { useHealthCenter } from '../context/HealthCenterContext';
+import { CLINIC_ADDRESS, COVERAGE_AREAS } from '../data/masikapClinicInfo';
+
+const clinicStaff = [
+  { name: 'Jashen D. Gener, MD', role: 'Physician', roleFil: 'Doktor', group: 'Medical' },
+  { name: 'Pauline Joy D. Sanchez, RN', role: 'Nurse', roleFil: 'Nars', group: 'Medical' },
+  { name: 'Cristy M. Reyes, RM', role: 'Midwife', roleFil: 'Komadrona', group: 'Medical' },
+  { name: 'Marilta L. Vargas', role: 'Midwife', roleFil: 'Komadrona', group: 'Medical' },
+  { name: 'Jocelyn L. Miguel, RM', role: 'Midwife', roleFil: 'Komadrona', group: 'Medical' },
+  { name: 'Madeleine S. Reyes, DMD', role: 'Dentist', roleFil: 'Dentista', group: 'Dental/Doctor' },
+];
 
 export const PatientFlow: React.FC = () => {
   const { language } = useHealthCenter();
@@ -8,61 +18,66 @@ export const PatientFlow: React.FC = () => {
   return (
     <section aria-labelledby="patient-flow-title" className="site-section-bg section-enter border-t border-[#dce7e1] py-8 sm:py-10">
       <div className="mx-auto max-w-7xl px-5 sm:px-8 lg:px-12">
-        <div className="mb-8 max-w-2xl">
-          <div className="mb-2 text-xs font-bold uppercase tracking-wider text-[#2c7a5f]">{isFilipino ? 'Gabay sa pagbisita' : 'Plan your visit'}</div>
-          <h2 id="patient-flow-title" className="text-2xl font-bold text-[#0f4d3c] sm:text-3xl">{isFilipino ? 'Daloy ng pasyente' : 'Patient flow'}</h2>
-          <p className="mt-2 text-sm text-[#6b7280]">{isFilipino ? 'Magsimula sa registration at susundan kayo ng kawani sa tamang serbisyo.' : 'Start at registration and staff will guide you to the right service.'}</p>
+        <div className="mb-7">
+          <div className="mb-2 text-xs font-bold uppercase tracking-wider text-[#2c7a5f]">Masikap Health Center</div>
+          <h2 id="patient-flow-title" className="text-2xl font-bold text-[#0f4d3c] sm:text-3xl">{isFilipino ? 'Klinika at mga serbisyo' : 'Clinic information'}</h2>
+          <address className="mt-2 text-sm not-italic text-[#4b5563]">{CLINIC_ADDRESS}</address>
         </div>
 
-        <div className="reveal-stagger grid gap-5 lg:grid-cols-[1.15fr_0.85fr]">
-          <div className="site-card p-5 sm:p-6">
-            <div className="divide-y divide-[#e7eee9] border-y border-[#e7eee9]">
-              <div className="flex gap-4 py-4">
-                <span className="text-sm font-bold tabular-nums text-[#2c7a5f]">01</span>
-                <div><h3 className="text-base font-bold text-[#0f4d3c]">{isFilipino ? 'Registration' : 'Registration'}</h3><p className="mt-1 text-sm text-[#6b7280]">{isFilipino ? 'Ihanda ang pangalan, address, at cellphone number.' : 'Provide your name, address, and cellphone number.'}</p></div>
-              </div>
-              <div className="flex gap-4 py-4">
-                <span className="text-sm font-bold tabular-nums text-[#2c7a5f]">02</span>
-                <div><h3 className="text-base font-bold text-[#0f4d3c]">{isFilipino ? 'Piliin ang tamang care desk' : 'Initial screening'}</h3><p className="mt-1 text-sm text-[#6b7280]">{isFilipino ? 'Dental, pediatric, o women’s health ang magtatakda ng susunod na hakbang.' : 'Dental, pediatric, or women’s health staff will guide the next step.'}</p></div>
-              </div>
-              <div className="grid gap-5 py-5 sm:grid-cols-3">
-                <div><h3 className="text-sm font-bold text-[#0f4d3c]">{isFilipino ? 'Dental · edad 20 pataas' : 'Dental · age 20+'}</h3><p className="mt-1 text-sm text-[#6b7280]">{isFilipino ? 'Risk assessment at TB FAST screening. Kung kailangan: PhilHealth enrollment, booklet, at pag-dispense ng gamot.' : 'Risk assessment and TB FAST screening. If needed: PhilHealth enrollment, a booklet, and medicine dispensing.'}</p></div>
-                <div><h3 className="text-sm font-bold text-[#0f4d3c]">{isFilipino ? 'Pedia · wala pang 20' : 'Pediatrics · under 20'}</h3><p className="mt-1 text-sm text-[#6b7280]">{isFilipino ? 'Vital signs, timbang, at taas. May bakuna at pagtimbang para sa well-baby.' : 'Vital signs, weight, and height. Well-baby visits include vaccination and weighing.'}</p></div>
-                <div><h3 className="text-sm font-bold text-[#0f4d3c]">{isFilipino ? 'Women’s health' : 'Women’s health'}</h3><p className="mt-1 text-sm text-[#6b7280]">{isFilipino ? 'Family planning, VIA, prenatal care, at konsultasyon.' : 'Family planning, VIA, prenatal care, and consultation.'}</p></div>
-              </div>
-              <div className="flex gap-4 py-4">
-                <span className="text-sm font-bold tabular-nums text-[#2c7a5f]">03</span>
-                <div><h3 className="text-base font-bold text-[#0f4d3c]">{isFilipino ? 'Konsultasyon at follow-up' : 'Consultation and follow-up'}</h3><p className="mt-1 text-sm text-[#6b7280]">{isFilipino ? 'Ang mga may sakit ay sasailalim sa chief-complaint review at konsultasyon; ire-refer kung kailangan. Magpa-iskedyul ng follow-up check-up.' : 'Patients who are sick are assessed by chief complaint and seen for consultation, with referral when needed. Schedule a follow-up check-up.'}</p></div>
-              </div>
+        <div className="grid gap-6 lg:grid-cols-[1.3fr_0.7fr]">
+          <div className="site-card overflow-hidden">
+            <div className="overflow-x-auto">
+              <table className="w-full min-w-[640px] border-collapse text-left text-sm">
+                <thead className="bg-[#f3f7f4] text-xs font-bold uppercase text-[#374151]">
+                  <tr>
+                    <th scope="col" className="px-4 py-3">{isFilipino ? 'Pangalan' : 'Name'}</th>
+                    <th scope="col" className="px-4 py-3">{isFilipino ? 'Posisyon' : 'Designation'}</th>
+                    <th scope="col" className="px-4 py-3">{isFilipino ? 'Duty sa klinika' : 'Clinic duty'}</th>
+                    <th scope="col" className="px-4 py-3">{isFilipino ? 'Oras' : 'Clinic hours'}</th>
+                  </tr>
+                </thead>
+                <tbody className="divide-y divide-[#e7eee9]">
+                  {(['Medical', 'Dental/Doctor'] as const).map((group) => (
+                    <React.Fragment key={group}>
+                      <tr className="bg-[#f8faf9]">
+                        <th scope="rowgroup" colSpan={4} className="px-4 py-2 text-xs font-bold text-[#0f4d3c]">
+                          {isFilipino && group === 'Medical' ? 'Medikal' : group}
+                        </th>
+                      </tr>
+                      {clinicStaff.filter((staff) => staff.group === group).map((staff) => (
+                        <tr key={staff.name}>
+                          <td className="px-4 py-2.5 font-medium text-[#1f2937]">{staff.name}</td>
+                          <td className="px-4 py-2.5 text-[#4b5563]">{isFilipino ? staff.roleFil : staff.role}</td>
+                          <td className="px-4 py-2.5 text-[#4b5563]">{group === 'Medical' ? '7am-4pm' : 'Not listed'}</td>
+                          <td className="px-4 py-2.5 text-[#4b5563]">{group === 'Medical' ? '8h' : 'Not listed'}</td>
+                        </tr>
+                      ))}
+                    </React.Fragment>
+                  ))}
+                </tbody>
+              </table>
             </div>
-            <p className="mt-4 text-sm font-semibold text-[#0f4d3c]">{isFilipino ? 'May iron (ferrous sulfate) at calcium na ibinibigay sa Women’s Health Clinic.' : 'Ferrous sulfate and calcium are dispensed through the Women’s Health Clinic.'}</p>
           </div>
 
-          <div className="site-card divide-y divide-[#e7eee9] p-5 sm:p-6">
-            <details className="group py-4" open>
-              <summary className="cursor-pointer list-none text-base font-bold text-[#0f4d3c]">{isFilipino ? 'Bago pumunta sa Dental' : 'Before a dental visit'}</summary>
-              <ul className="mt-3 list-disc space-y-1.5 pl-5 text-sm text-[#6b7280]">
-                <li>{isFilipino ? 'Kumain ng almusal; maligo at magsipilyo.' : 'Eat breakfast, bathe, and brush your teeth.'}</li>
-                <li>{isFilipino ? 'Magsuot ng malinis na damit; bawal ang sando.' : 'Wear clean clothes; tank tops are not allowed.'}</li>
-                <li>{isFilipino ? 'Magdala ng bimpo o panyo.' : 'Bring a small towel or handkerchief.'}</li>
-                <li>{isFilipino ? 'Edad 19 pataas: magpa-blood pressure sa reception desk.' : 'Age 19+: have your blood pressure checked at the reception desk.'}</li>
-              </ul>
-            </details>
-            <div className="py-4">
-              <h3 className="text-base font-bold text-[#0f4d3c]">X-Ray Referral</h3>
-              <p className="mt-1 text-sm text-[#6b7280]">{isFilipino ? 'Walang nakalistang X-ray service sa Quintin De Borja. Magtanong sa kawani para sa referral.' : 'No X-ray service is listed at Quintin De Borja. Ask clinic staff for referral information.'}</p>
-              <p className="mt-1 text-sm text-[#6b7280]">{isFilipino ? '2:00 PM ang release ng resulta. Kumpirmahin sa X-ray desk ang araw ng pagkuha kapag nagsumite ng request.' : 'Results are released at 2:00 PM. Confirm the pickup day with the X-ray desk when submitting a request.'}</p>
-            </div>
-            <div className="py-4">
-              <h3 className="text-base font-bold text-[#0f4d3c]">Social Hygiene Clinic</h3>
-              <p className="mt-1 text-sm text-[#6b7280]">{isFilipino ? 'Lunes 8:00 AM-3:00 PM; Martes-Biyernes 9:00 AM-3:00 PM.' : 'Monday 8:00 AM-3:00 PM; Tuesday-Friday 9:00 AM-3:00 PM.'}</p>
-              <p className="mt-1 text-sm text-[#6b7280]">{isFilipino ? 'Para sa buntis na may laboratory testing: 8:00-9:00 AM. Tumatanggap ng walk-in na buntis para sa testing.' : 'Pregnancy laboratory testing: 8:00-9:00 AM. Walk-in pregnant patients are accepted for testing.'}</p>
-            </div>
-            <div className="py-4 text-sm text-rose-900">
-              <h3 className="font-bold uppercase">{isFilipino ? 'Kagat ng hayop' : 'Animal bite care'}</h3>
-              <p className="mt-1">{isFilipino ? 'Magpatingin agad sa clinic para masuri ng health worker. Huwag magpasya online na hindi kailangan ang bakuna o follow-up.' : 'Visit the clinic promptly for assessment by a health worker. Do not use an online chart to decide that vaccination or follow-up is unnecessary.'}</p>
-            </div>
-          </div>
+          <aside className="site-card p-5 sm:p-6">
+            <h3 className="text-base font-bold text-[#0f4d3c]">{isFilipino ? 'Mga serbisyo' : 'Services offered'}</h3>
+            <ul className="mt-3 space-y-2 text-sm text-[#4b5563]">
+              <li>{isFilipino ? 'Konsultasyon' : 'Consultation'}</li>
+              <li>{isFilipino ? 'Prenatal at postnatal' : 'Prenatal and postnatal care'}</li>
+              <li>{isFilipino ? 'Family planning' : 'Family planning'}</li>
+              <li>{isFilipino ? 'Bakuna' : 'Vaccination'}</li>
+            </ul>
+            <p className="mt-5 border-t border-[#e7eee9] pt-4 text-sm leading-relaxed text-[#4b5563]">
+              {isFilipino
+                ? 'Maaaring maging kwalipikado ang mga miyembro ng PhilHealth sa hanggang PHP 20,000 na benepisyo sa ilalim ng YAKAP. Maaaring may libreng gamot kung available sa center.'
+                : 'PhilHealth members may be eligible for up to PHP 20,000 in YAKAP benefits. Medicines may be provided at no cost when available at the center.'}
+            </p>
+          </aside>
+        </div>
+
+        <div className="mt-6 border-t border-[#dce7e1] pt-5">
+          <h3 className="text-sm font-bold text-[#0f4d3c]">{isFilipino ? 'Mga lugar na pinaglilingkuran' : 'Service area'}</h3>
+          <p className="mt-2 text-sm leading-relaxed text-[#4b5563]">{COVERAGE_AREAS.join(', ')}</p>
         </div>
       </div>
     </section>

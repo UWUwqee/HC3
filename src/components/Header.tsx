@@ -1,7 +1,6 @@
 import React, { useState } from 'react';
 import { useHealthCenter } from '../context/HealthCenterContext';
 import { Menu, X, Globe, CalendarDays, LogOut, Mail } from 'lucide-react';
-import centerPhoto from '../assets/images/QUINTIN.png';
 import { signOut } from 'firebase/auth';
 import { auth } from '../firebase';
 
@@ -45,8 +44,7 @@ export const Header: React.FC = () => {
             onClick={(e) => { e.preventDefault(); handleNavClick('overview'); }}
             className="flex min-w-0 shrink items-center gap-2 text-xs font-bold text-[#0f4d3c] transition-colors duration-200 hover:text-[#2c7a5f] sm:gap-3 sm:text-[15px]"
           >
-            <img src={centerPhoto} alt="Quintin De Borja Health Center logo" className="h-9 w-9 shrink-0 rounded-full border border-[#dce7e1] object-cover sm:h-11 sm:w-11" />
-            <span title={t.brand} className="min-w-0 truncate sm:overflow-visible sm:whitespace-nowrap">Quintin De Borja <span className="hidden sm:inline">Health Center</span></span>
+            <span title={t.brand} className="min-w-0 truncate sm:overflow-visible sm:whitespace-nowrap">Masikap <span className="hidden sm:inline">Health Center</span></span>
           </a>
 
           <nav className="hidden xl:flex items-center gap-7 text-sm font-medium text-[#6b7280]">

@@ -1,6 +1,7 @@
 import React from 'react';
 import { useHealthCenter } from '../context/HealthCenterContext';
-import { Clock, MapPin, CalendarDays, ShieldAlert } from 'lucide-react';
+import { Clock, MapPin, CalendarDays } from 'lucide-react';
+import { CLINIC_ADDRESS, COVERAGE_AREAS } from '../data/masikapClinicInfo';
 
 export const ContactSection: React.FC = () => {
   const { t, language, setBookingModalOpen, clinicOpen, appointmentRequestAvailability } = useHealthCenter();
@@ -41,27 +42,29 @@ export const ContactSection: React.FC = () => {
           <div className="flex gap-4">
             <MapPin className="w-5 h-5 text-teal-800 shrink-0 mt-1" />
             <div>
-              <h3 className="text-sm font-bold text-slate-900">Quintin De Borja Health Center</h3>
-              <p className="mt-1 text-sm text-slate-600">Municipality of Pateros, Metro Manila</p>
-              <p className="mt-1 text-sm text-slate-600">Serving Aguho, Martirez, and Poblacion</p>
+              <h3 className="text-sm font-bold text-slate-900">Masikap Health Center</h3>
+              <p className="mt-1 text-sm text-slate-600">{CLINIC_ADDRESS}</p>
+              <p className="mt-1 text-sm text-slate-600">{language === 'fil' ? 'Mga lugar na pinaglilingkuran' : 'Service areas'}</p>
+              <p className="mt-1 text-sm leading-relaxed text-slate-600">{COVERAGE_AREAS.join(', ')}</p>
             </div>
           </div>
 
           <div className="flex gap-4">
             <Clock className="w-5 h-5 text-teal-800 shrink-0 mt-1" />
             <div>
-              <h3 className="text-sm font-bold text-slate-900">Clinic schedules</h3>
-              <p className="mt-1 text-sm text-slate-600">No permanent doctor; duty personnel Tue-Fri, 8-11 AM</p>
-              <p className="mt-1 text-sm text-slate-600">No X-ray service listed</p>
-              <p className="mt-1 text-sm text-slate-600">Dental: Mon-Tue QDB · Wed Outreach · Thu-Fri Delfin Salonga</p>
+              <h3 className="text-sm font-bold text-slate-900">{language === 'fil' ? 'Kawani at mga serbisyo' : 'Staff and services'}</h3>
+              <p className="mt-1 text-sm text-slate-600">{language === 'fil' ? 'Duty ng medical staff: 7am-4pm (8 oras).' : 'Medical staff duty: 7am-4pm (8 hours).'}</p>
+              <p className="mt-1 text-sm text-slate-600">{language === 'fil' ? 'Konsultasyon, prenatal at postnatal, family planning, at bakuna.' : 'Consultation, prenatal and postnatal care, family planning, and vaccination.'}</p>
+              <p className="mt-1 text-sm text-slate-600">{language === 'fil' ? 'Maaaring may libreng gamot kung available sa center.' : 'Medicines may be provided at no cost when available at the center.'}</p>
             </div>
           </div>
         </div>
 
-        <a href="tel:+63286425159" className="mt-6 flex items-start gap-3 text-sm text-slate-700 hover:text-teal-900">
-          <ShieldAlert className="w-4 h-4 text-rose-700 shrink-0 mt-0.5" />
-          <span><strong className="text-slate-900">Emergency rescue:</strong> (02) 8642-5159 · 24-hour ambulance and disaster response</span>
-        </a>
+        <p className="mt-6 border-t border-slate-300 pt-5 text-sm leading-relaxed text-slate-700">
+          {language === 'fil'
+            ? 'Maaaring maging kwalipikado ang mga miyembro ng PhilHealth sa hanggang PHP 20,000 na benepisyo sa ilalim ng YAKAP.'
+            : 'PhilHealth members may be eligible for up to PHP 20,000 in YAKAP benefits.'}
+        </p>
       </div>
     </section>
   );

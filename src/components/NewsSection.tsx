@@ -121,7 +121,7 @@ export const NewsSection: React.FC = () => {
                   {language === 'fil' ? readingArticle.titleFil : readingArticle.title}
                 </h3>
                 <div className="text-xs text-slate-500">
-                  Published by {readingArticle.author} · Quintin De Borja Health Center
+                  Published by {readingArticle.author} · Masikap Health Center
                 </div>
               </div>
               <button

@@ -14,7 +14,7 @@ import { auth } from './firebase';
 import { AuthScreen } from './components/AuthScreen';
 import { AdminPanel } from './components/AdminPanel';
 import { UserAppointmentChat } from './components/UserAppointmentChat';
-import patientFlowDiagram from './assets/images/DIAGRAM xd.png';
+import { PatientFlow } from './components/PatientFlow';
 
 const AppContent: React.FC<{ user: User }> = ({ user }) => {
   const { activeSection, notificationToast, setNotificationToast, appointmentRequestAvailability, language } = useHealthCenter();
@@ -57,17 +57,7 @@ const AppContent: React.FC<{ user: User }> = ({ user }) => {
           <>
             <Hero />
             <RouteFinder />
-            <section aria-label="Patient flow" className="site-section-bg section-enter border-t border-[#dce7e1] py-8 sm:py-10">
-              <div className="mx-auto max-w-7xl px-5 sm:px-8 lg:px-12">
-                <img
-                  src={patientFlowDiagram}
-                  alt="Patient flow and visit information diagram"
-                  loading="lazy"
-                  decoding="async"
-                  className="mx-auto block h-auto w-full max-w-6xl object-contain"
-                />
-              </div>
-            </section>
+            <PatientFlow />
           </>
         )}
       </main>
