@@ -3,6 +3,7 @@ import { useHealthCenter } from '../context/HealthCenterContext';
 import { Menu, X, Globe, CalendarDays, LogOut, Mail } from 'lucide-react';
 import { signOut } from 'firebase/auth';
 import { auth } from '../firebase';
+import masikapLogo from '../assets/images/MASIKAP.png';
 
 export const Header: React.FC = () => {
   const {
@@ -44,6 +45,7 @@ export const Header: React.FC = () => {
             onClick={(e) => { e.preventDefault(); handleNavClick('overview'); }}
             className="flex min-w-0 shrink items-center gap-2 text-xs font-bold text-[#0f4d3c] transition-colors duration-200 hover:text-[#2c7a5f] sm:gap-3 sm:text-[15px]"
           >
+            <img src={masikapLogo} alt="" aria-hidden="true" className="h-10 w-10 shrink-0 rounded-full border border-[#dce7e1] object-cover" />
             <span title={t.brand} className="min-w-0 truncate sm:overflow-visible sm:whitespace-nowrap">Masikap <span className="hidden sm:inline">Health Center</span></span>
           </a>
 
