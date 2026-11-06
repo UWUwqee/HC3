@@ -38,6 +38,7 @@ export const AdminPanel: React.FC = () => {
   const [activeTab, setActiveTab] = useState<'requests' | 'calendar' | 'content' | 'reports'>('requests');
   const [selectedId, setSelectedId] = useState<string>('');
   const [statusFilter, setStatusFilter] = useState('all');
+  const [serviceFilter, setServiceFilter] = useState('all');
   const [search, setSearch] = useState('');
   const [chatInput, setChatInput] = useState('');
   const [loading, setLoading] = useState(true);
@@ -82,6 +83,7 @@ export const AdminPanel: React.FC = () => {
     return () => window.clearInterval(timer);
   }, []);
 
+  const services = useMemo(() => [...new Set(appointments.map((appointment) => appointment.service_name).filter(Boolean))].sort(), [appointments]);
   const selected = useMemo(() => appointments.find((appointment) => appointment.id === selectedId), [appointments, selectedId]);
   const selectedMessages = useMemo(() => messages.filter((message) => message.appointment_id === selectedId), [messages, selectedId]);
   const counts = useMemo(() => ({
@@ -94,15 +96,22 @@ export const AdminPanel: React.FC = () => {
     return appointments.filter((appointment) => {
       const matchesStatus = statusFilter === 'all'
         || (statusFilter === 'rejected' ? ['rejected', 'cancelled'].includes(appointment.status) : appointment.status === statusFilter);
+      const matchesService = serviceFilter === 'all' || appointment.service_name === serviceFilter;
       const matchesSearch = !query || [
         appointment.patient_name,
         appointment.reference_code,
         appointment.service_name,
         appointment.phone,
       ].some((value) => value.toLowerCase().includes(query));
-      return matchesStatus && matchesSearch;
+      return matchesStatus && matchesService && matchesSearch;
     });
-  }, [appointments, search, statusFilter]);
+  }, [appointments, search, serviceFilter, statusFilter]);
+
+  useEffect(() => {
+    if (selectedId && !filteredAppointments.some((appointment) => appointment.id === selectedId)) {
+      setSelectedId('');
+    }
+  }, [filteredAppointments, selectedId]);
 
   const performAction = async (action: string, appointment: AppointmentRow) => {
     if (action === 'delete_chat' && !window.confirm('Archive this conversation for the patient? Messages will remain available in admin records, and the appointment request will be kept.')) return;
@@ -299,6 +308,12 @@ export const AdminPanel: React.FC = () => {
                   <button key={value} type="button" onClick={() => setStatusFilter(value)} className={`min-h-11 shrink-0 whitespace-nowrap px-3 text-xs font-bold ${statusFilter === value ? 'bg-[#173a37] text-white' : 'bg-[#f1f4f1] text-[#66736f] hover:bg-[#e7ede8]'}`}>{label}</button>
                 ))}
               </div>
+              <label className="mt-2 block text-[11px] font-semibold text-[#66736f]">Service
+                <select value={serviceFilter} onChange={(event) => setServiceFilter(event.target.value)} className="mt-1 block min-h-10 w-full border border-[#d9e1dc] bg-white px-3 text-xs text-[#17312e]">
+                  <option value="all">All services</option>
+                  {services.map((service) => <option key={service} value={service}>{service}</option>)}
+                </select>
+              </label>
             </div>
             <div className="max-h-[420px] overflow-y-auto lg:max-h-[calc(100vh-360px)]">
               {loading ? <p className="p-5 text-sm text-[#66736f]">Loading requests...</p> : filteredAppointments.map((appointment) => (

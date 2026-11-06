@@ -273,19 +273,26 @@ export const HealthCenterProvider: React.FC<{ children: ReactNode }> = ({ childr
       }
     };
 
-    void loadSiteContent();
-    void loadClinicStatus();
-    void loadAppointments();
-    void loadUnreadMessages();
-    const timer = window.setInterval(() => {
-      void loadSiteContent();
-      void loadClinicStatus();
-      void loadAppointments();
-      void loadUnreadMessages();
-    }, 10000);
+    let refreshInProgress = false;
+    const refreshWebsiteData = async () => {
+      if (refreshInProgress || document.visibilityState === 'hidden') return;
+      refreshInProgress = true;
+      try {
+        await Promise.all([loadSiteContent(), loadClinicStatus(), loadAppointments(), loadUnreadMessages()]);
+      } finally {
+        refreshInProgress = false;
+      }
+    };
+    const refreshWhenVisible = () => {
+      if (document.visibilityState === 'visible') void refreshWebsiteData();
+    };
+    void refreshWebsiteData();
+    const timer = window.setInterval(() => void refreshWebsiteData(), 3500);
+    document.addEventListener('visibilitychange', refreshWhenVisible);
     return () => {
       active = false;
       window.clearInterval(timer);
+      document.removeEventListener('visibilitychange', refreshWhenVisible);
     };
   }, []);
 
