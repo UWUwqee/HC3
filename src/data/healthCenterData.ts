@@ -1,4 +1,4 @@
-import { CLINIC_ADDRESS, MASIKAP_SERVICES } from './masikapClinicInfo';
+import { CLINIC_ADDRESS, MASIKAP_SERVICES } from './masikapClinicInfo.ts';
 import type { ClinicPublicSettings, NewsUpdate, OutreachProgram, ServiceDetail } from '../types';
 
 export const DEFAULT_CLINIC_PUBLIC_SETTINGS: ClinicPublicSettings = {

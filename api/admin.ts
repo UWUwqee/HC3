@@ -55,6 +55,7 @@ function getFirebaseAdmin() {
   if (getApps().length > 0) return getAuth();
   const serviceAccountJson = process.env.FIREBASE_SERVICE_ACCOUNT_JSON?.trim();
   let credential;
+
   if (serviceAccountJson) {
     try {
       credential = cert(JSON.parse(serviceAccountJson));
@@ -62,8 +63,13 @@ function getFirebaseAdmin() {
       throw new Error('FIREBASE_SERVICE_ACCOUNT_JSON is not valid JSON or is missing service-account fields.');
     }
   } else {
-    credential = applicationDefault();
+    try {
+      credential = applicationDefault();
+    } catch {
+      throw new Error('Missing Firebase Admin credentials: add FIREBASE_SERVICE_ACCOUNT_JSON to your Vercel environment variables.');
+    }
   }
+
   initializeApp({ credential });
   return getAuth();
 }
@@ -135,10 +141,12 @@ async function authenticate(request: ApiRequest) {
   const authorization = text(request.headers.authorization, 2000);
   const token = authorization.startsWith('Bearer ') ? authorization.slice(7) : '';
   if (!token) return null;
+
   try {
     return await getFirebaseAdmin().verifyIdToken(token);
-  } catch {
-    return null;
+  } catch (error) {
+    console.error('Firebase token verification failed:', error);
+    throw new Error(error instanceof Error ? error.message : 'Firebase token verification failed.');
   }
 }
 
@@ -153,7 +161,16 @@ function isAdmin(decoded: Awaited<ReturnType<ReturnType<typeof getFirebaseAdmin>
 
 export default async function handler(request: ApiRequest, response: ApiResponse) {
   response.setHeader('Cache-Control', 'no-store');
-  const decoded = await authenticate(request);
+
+  let decoded;
+  try {
+    decoded = await authenticate(request);
+  } catch (error) {
+    return response.status(503).json({
+      error: error instanceof Error ? error.message : 'Authentication service is not configured.',
+    });
+  }
+
   if (!decoded) return response.status(401).json({ error: 'Authentication is required.' });
 
   if (request.method === 'GET' && new URL(request.url ?? '/', 'http://localhost').searchParams.get('mode') === 'role') {
