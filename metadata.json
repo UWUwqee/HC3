@@ -1,0 +1,6 @@
+{
+  "name": "Quintin De Borja Health Center",
+  "description": "Official community health portal for Quintin De Borja Health Center in Pateros, serving Aguho, Martirez, and Poblacion. Access clinic schedules, staff directory, outreach booking, medicine refills, and secure patient portal.",
+  "requestFramePermissions": [],
+  "majorCapabilities": ["MAJOR_CAPABILITY_SERVER_SIDE_GEMINI_API"]
+}
