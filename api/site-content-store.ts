@@ -1,5 +1,5 @@
 import { createClient } from '@libsql/client';
-import { DEFAULT_CLINIC_PUBLIC_SETTINGS, NEWS_UPDATES, OUTREACH_PROGRAMS, SERVICES_DATA } from '../src/data/healthCenterData.js';
+import { DEFAULT_CLINIC_PUBLIC_SETTINGS, NEWS_UPDATES, OUTREACH_PROGRAMS, SERVICES_DATA } from '../src/data/healthCenterData.ts';
 import type {
   ClinicPublicSettings,
   NewsUpdate,

@@ -4,7 +4,7 @@ import { randomUUID } from 'node:crypto';
 import type { IncomingMessage, ServerResponse } from 'node:http';
 import { applicationDefault, cert, getApps, initializeApp } from 'firebase-admin/app';
 import { getAuth } from 'firebase-admin/auth';
-import { clinicPublicSettingKeys, ensureSiteContent, getContentDatabase, readSiteContent, validateSiteContent } from './site-content-store.js';
+import { clinicPublicSettingKeys, ensureSiteContent, getContentDatabase, readSiteContent, validateSiteContent } from './site-content-store.ts';
 
 type ApiRequest = IncomingMessage & { body?: unknown; headers: IncomingMessage['headers'] & { authorization?: string } };
 type ApiResponse = ServerResponse & {

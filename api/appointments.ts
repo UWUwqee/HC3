@@ -4,7 +4,7 @@ import { randomBytes, randomUUID } from 'node:crypto';
 import type { IncomingMessage, ServerResponse } from 'node:http';
 import { applicationDefault, cert, getApps, initializeApp } from 'firebase-admin/app';
 import { getAuth } from 'firebase-admin/auth';
-import { COVERAGE_AREAS, MASIKAP_SERVICES } from '../src/data/masikapClinicInfo.js';
+import { COVERAGE_AREAS, MASIKAP_SERVICES } from '../src/data/masikapClinicInfo.ts';
 
 type ApiRequest = IncomingMessage & { body?: unknown; headers: IncomingMessage['headers'] & { authorization?: string } };
 type ApiResponse = ServerResponse & {

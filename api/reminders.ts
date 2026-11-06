@@ -1,6 +1,6 @@
 import type { IncomingMessage, ServerResponse } from 'node:http';
 import { randomUUID } from 'node:crypto';
-import { getContentDatabase } from './site-content-store.js';
+import { getContentDatabase } from './site-content-store.ts';
 
 type ApiRequest = IncomingMessage & { headers: IncomingMessage['headers'] & { authorization?: string } };
 type ApiResponse = ServerResponse & {
