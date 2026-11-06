@@ -42,16 +42,16 @@ export const ServicesSection: React.FC = () => {
   const isFilipino = language === 'fil';
 
   return (
-    <section id="services" aria-labelledby="services-title" className="site-section-bg section-enter border-b border-[#dce7e1] py-8 sm:py-10">
+    <section id="services" aria-labelledby="services-title" className="site-section-bg section-enter border-b border-[#dce7e1] py-4 sm:py-6">
       <div className="mx-auto max-w-7xl px-5 sm:px-8 lg:px-12">
-        <div className="mb-7">
+        <div className="mb-4">
           <div className="mb-2 text-[11px] font-bold uppercase tracking-[0.18em] text-[#2c7a5f]">Masikap Health Center</div>
-          <h1 id="services-title" className="text-3xl font-bold text-[#0f4d3c] sm:text-4xl">
+          <h1 id="services-title" className="text-2xl font-bold text-[#0f4d3c] sm:text-3xl">
             {isFilipino ? 'Mga serbisyo' : 'Services'}
           </h1>
         </div>
 
-        <div className="grid gap-5 sm:grid-cols-2 xl:grid-cols-4">
+        <div className="grid gap-3 sm:grid-cols-2 xl:grid-cols-4">
           {services.map((service) => (
             <article key={service.id} className="site-card overflow-hidden transition-transform duration-200 hover:-translate-y-0.5">
               <div className="overflow-hidden">
@@ -61,16 +61,16 @@ export const ServicesSection: React.FC = () => {
                     alt={service.imageAlt}
                     loading="lazy"
                     decoding="async"
-                    className="aspect-[4/3] w-full object-cover"
+                    className="aspect-[16/10] w-full object-cover"
                   />
                 ) : (
-                  <div className="flex aspect-[4/3] w-full items-center justify-center bg-[#e8f1ec] text-[#17645c]" aria-hidden="true">
+                  <div className="flex aspect-[16/10] w-full items-center justify-center bg-[#e8f1ec] text-[#17645c]" aria-hidden="true">
                     <Syringe className="h-12 w-12" strokeWidth={1.5} />
                   </div>
                 )}
               </div>
-              <div className="px-4 pb-4 pt-4">
-                <h2 className="text-center text-lg font-bold text-[#0f4d3c]">
+              <div className="px-3 pb-3 pt-3">
+                <h2 className="text-center text-base font-bold text-[#0f4d3c]">
                   {isFilipino ? service.titleFil : service.title}
                 </h2>
               </div>
