@@ -64,7 +64,7 @@ const AppContent: React.FC<{ user: User }> = ({ user }) => {
 
       <Footer />
 
-      <UserAppointmentChat />
+      <UserAppointmentChat user={user} />
       <OutreachBookingModal user={user} />
 
       {notificationToast && (
