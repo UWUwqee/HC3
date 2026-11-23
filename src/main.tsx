@@ -7,7 +7,11 @@ const publishableKey = import.meta.env.VITE_CLERK_PUBLISHABLE_KEY?.trim();
 
 createRoot(document.getElementById('root')!).render(
   publishableKey ? (
-    <ClerkProvider publishableKey={publishableKey} afterSignOutUrl="/">
+    <ClerkProvider
+      publishableKey={publishableKey}
+      afterSignOutUrl="/"
+      localization={{ signIn: { start: { title: 'Sign in to Health Center' } } }}
+    >
       <App />
     </ClerkProvider>
   ) : (
