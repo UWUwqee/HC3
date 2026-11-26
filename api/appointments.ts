@@ -104,13 +104,6 @@ async function ensureAppointmentTable(db: ReturnType<typeof createClient>) {
     )
   `);
   await db.execute(`
-    CREATE TABLE IF NOT EXISTS clinic_settings (
-      setting_key TEXT PRIMARY KEY,
-      setting_value TEXT NOT NULL,
-      updated_at TEXT NOT NULL
-    )
-  `);
-  await db.execute(`
     CREATE TABLE IF NOT EXISTS appointment_messages (
       id TEXT PRIMARY KEY,
       appointment_id TEXT NOT NULL,
@@ -121,11 +114,6 @@ async function ensureAppointmentTable(db: ReturnType<typeof createClient>) {
       created_at TEXT NOT NULL
     )
   `);
-  await db.execute({
-    sql: `INSERT OR IGNORE INTO clinic_settings (setting_key, setting_value, updated_at)
-          VALUES ('clinic_open', '0', ?)`,
-    args: [new Date().toISOString()],
-  });
 }
 
 export default async function handler(request: ApiRequest, response: ApiResponse) {

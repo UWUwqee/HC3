@@ -1,7 +1,7 @@
 import React, { useEffect, useRef, useState } from 'react';
 import L from 'leaflet';
 import 'leaflet/dist/leaflet.css';
-import { Bike, CarFront, ChevronDown, ChevronUp, ExternalLink, LocateFixed, MapPin, PersonStanding, RefreshCw } from 'lucide-react';
+import { Bike, CarFront, ChevronDown, ChevronUp, ExternalLink, LocateFixed, MapPin, Motorbike, PersonStanding, RefreshCw } from 'lucide-react';
 import { CLINIC_ADDRESS } from '../data/masikapClinicInfo';
 import { useHealthCenter } from '../context/HealthCenterContext';
 
@@ -33,7 +33,7 @@ const modes: Array<{ id: TravelMode; label: string; icon: React.ReactNode }> = [
   { id: 'walking', label: 'Walk', icon: <PersonStanding className="h-4 w-4" /> },
   { id: 'bicycling', label: 'Bike', icon: <Bike className="h-4 w-4" /> },
   { id: 'driving', label: 'Car', icon: <CarFront className="h-4 w-4" /> },
-  { id: 'motorcycle', label: 'Moto', icon: <CarFront className="h-4 w-4" /> },
+  { id: 'motorcycle', label: 'Moto', icon: <Motorbike className="h-4 w-4" /> },
 ];
 
 function formatDistance(meters: number) {
@@ -290,7 +290,7 @@ export const RouteFinder: React.FC = () => {
 
   return (
     <section aria-label={isFilipino ? 'Mapa ng direksyon' : 'Navigation map'} className="border-b border-[#dce7e1] bg-[#f7faf8] py-3 sm:py-4">
-      <div className="mx-auto w-full max-w-7xl px-5 sm:px-8 lg:px-12">
+      <div className="mx-auto w-full max-w-none px-4 sm:px-6 lg:px-8">
         <aside aria-label={isFilipino ? 'Live na mapa ng direksyon' : 'Live directions map'} className="route-enter w-full overflow-hidden rounded-sm border border-[#d7dfda] bg-[#fcfdfb] shadow-[0_10px_32px_rgba(23,58,55,0.12)]">
           <header className="flex items-center justify-between gap-2 bg-[#173a37] px-3 py-2.5 text-white">
             <div className="min-w-0">

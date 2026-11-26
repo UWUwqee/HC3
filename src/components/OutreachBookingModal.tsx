@@ -50,7 +50,6 @@ export const OutreachBookingModal: React.FC = () => {
     language,
     bookingModalOpen,
     setBookingModalOpen,
-    clinicOpen,
     appointmentRequestAvailability,
     markAppointmentRequestStatus,
     selectedProgramForBooking,
@@ -397,14 +396,6 @@ export const OutreachBookingModal: React.FC = () => {
                 <div className={`h-full bg-teal-800 transition-all ${formStep === 1 ? 'w-1/2' : 'w-full'}`} />
               </div>
             </div>
-
-            {clinicOpen !== true && (
-              <p role="status" className="border border-amber-200 bg-amber-50 px-4 py-3 text-sm font-semibold text-amber-900">
-                {clinicOpen === false
-                  ? (isFilipino ? 'Sarado ang center para sa personal na serbisyo ngayon. Maaari pa ring mag-request ng online appointment.' : 'The center is closed for in-person services now. You can still request an appointment online.')
-                  : (isFilipino ? 'Tinitingnan ang oras ng serbisyo ng center.' : 'Checking the center’s in-person service hours.')}
-              </p>
-            )}
 
             {formStep === 1 ? (
               <div className="grid gap-3 sm:grid-cols-2 sm:gap-4">

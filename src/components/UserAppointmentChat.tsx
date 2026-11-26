@@ -42,6 +42,17 @@ async function chatRequest(getToken: () => Promise<string | null>, body?: Record
   });
 }
 
+function getDisplayMessage(message: string) {
+  const legacyConfirmation = message.match(
+    /^Your appointment for (.+) on (\d{4}-\d{2}-\d{2}) at (.+?) has been automatically confirmed\. You can view this schedule in your appointment chat\./,
+  );
+  if (!legacyConfirmation) return message;
+
+  const [, service, date, time] = legacyConfirmation;
+  const formattedTime = formatAppointmentTime(time);
+  return `This is an automated message.\n\nYour appointment for ${service} on ${date} at ${formattedTime} has been automatically confirmed. You can view the schedule in your appointment chat.\n\nFilipino:\nAwtomatikong mensahe ito. Kumpirmado na ang iyong appointment para sa ${service} sa ${date}, ganap na ${formattedTime}. Maaari mong tingnan ang iskedyul sa chat ng iyong appointment.`;
+}
+
 export const UserAppointmentChat: React.FC = () => {
   const { getToken } = useAuth();
   const { user } = useUser();
@@ -163,7 +174,7 @@ export const UserAppointmentChat: React.FC = () => {
           {selectedMessages.map((message) => (
             <div key={message.id} className={`flex ${message.sender_role === 'user' ? 'justify-end' : 'justify-start'}`}>
               <article className={`max-w-[85%] whitespace-pre-wrap break-words px-4 py-3 text-sm ${message.sender_role === 'user' ? 'bg-[#17645c] text-white' : 'border border-[#e0e8e2] bg-white text-[#17312e]'}`}>
-                <p>{message.message}</p>
+                <p>{getDisplayMessage(message.message)}</p>
                 <p className={`mt-2 text-[10px] ${message.sender_role === 'user' ? 'text-white/75' : 'text-slate-500'}`}>
                   {message.sender_name} · {new Intl.DateTimeFormat(isFilipino ? 'fil-PH' : 'en-PH', { dateStyle: 'short', timeStyle: 'short' }).format(new Date(message.created_at))}
                 </p>

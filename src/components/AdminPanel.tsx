@@ -80,7 +80,7 @@ export const AdminPanel: React.FC = () => {
   const [appointments, setAppointments] = useState<AppointmentRow[]>([]);
   const [messages, setMessages] = useState<ChatMessage[]>([]);
   const [slotSettings, setSlotSettings] = useState<SlotSetting[]>([]);
-  const [activeTab, setActiveTab] = useState<'requests' | 'completed' | 'calendar' | 'content' | 'reports'>('requests');
+  const [activeTab, setActiveTab] = useState<'requests' | 'priority' | 'completed' | 'calendar' | 'content' | 'reports'>('requests');
   const [selectedId, setSelectedId] = useState<string>('');
   const [statusFilter, setStatusFilter] = useState('all');
   const [appointmentDateFilter, setAppointmentDateFilter] = useState('');
@@ -89,8 +89,6 @@ export const AdminPanel: React.FC = () => {
   const [search, setSearch] = useState('');
   const [chatInput, setChatInput] = useState('');
   const [loading, setLoading] = useState(true);
-  const [clinicOpen, setClinicOpen] = useState<boolean | null>(null);
-  const [clinicStatusSaving, setClinicStatusSaving] = useState(false);
   const [error, setError] = useState('');
 
   const loadWorkspace = async () => {
@@ -105,17 +103,6 @@ export const AdminPanel: React.FC = () => {
         second.created_at.localeCompare(first.created_at) || second.id.localeCompare(first.id)));
       setMessages(data.messages);
       setSlotSettings(data.slotSettings ?? []);
-      const statusToken = await getToken();
-      if (!statusToken) throw new Error('A Clerk session token could not be created.');
-      const statusResponse = await fetch('/api/admin?mode=clinic_status', {
-        headers: { Authorization: `Bearer ${statusToken}` },
-        cache: 'no-store',
-      });
-      const statusData = await statusResponse.json() as { clinicOpen?: boolean; error?: string };
-      if (!statusResponse.ok || typeof statusData.clinicOpen !== 'boolean') {
-        throw new Error(statusData.error || 'Clinic status could not be loaded.');
-      }
-      setClinicOpen(statusData.clinicOpen);
       setError('');
     } catch (caught) {
       setError(caught instanceof Error ? caught.message : 'Admin workspace could not be loaded.');
@@ -137,6 +124,8 @@ export const AdminPanel: React.FC = () => {
     pending: appointments.filter((appointment) => appointment.status === 'pending').length,
     confirmed: appointments.filter((appointment) => appointment.status === 'confirmed').length,
     completed: appointments.filter((appointment) => appointment.status === 'completed').length,
+    priority: appointments.filter((appointment) => appointment.status !== 'completed'
+      && getPriorityCategoryLabels(appointment.priority_categories ?? '').length > 0).length,
     rejected: appointments.filter((appointment) => appointment.status === 'rejected' || appointment.status === 'cancelled').length,
   }), [appointments]);
   const filteredAppointments = useMemo(() => {
@@ -144,8 +133,10 @@ export const AdminPanel: React.FC = () => {
     return appointments.filter((appointment) => {
       const matchesStatus = activeTab === 'completed'
         ? appointment.status === 'completed'
-        : statusFilter === 'all'
-          || (statusFilter === 'rejected' ? ['rejected', 'cancelled'].includes(appointment.status) : appointment.status === statusFilter);
+        : activeTab === 'priority'
+          ? appointment.status !== 'completed' && getPriorityCategoryLabels(appointment.priority_categories ?? '').length > 0
+          : statusFilter === 'all'
+            || (statusFilter === 'rejected' ? ['rejected', 'cancelled'].includes(appointment.status) : appointment.status === statusFilter);
       const matchesDate = !appointmentDateFilter || appointment.preferred_date === appointmentDateFilter;
       const matchesService = serviceFilter === 'all' || appointment.service_name === serviceFilter;
       const matchesPriority = !priorityOnly || getPriorityCategoryLabels(appointment.priority_categories ?? '').length > 0;
@@ -216,29 +207,6 @@ export const AdminPanel: React.FC = () => {
     }
   };
 
-  const updateClinicStatus = async (isOpen: boolean) => {
-    setClinicStatusSaving(true);
-    try {
-      const token = await getToken();
-      if (!token) throw new Error('Sign in to update clinic status.');
-      const response = await fetch('/api/admin', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${token}` },
-        body: JSON.stringify({ action: 'set_clinic_status', isOpen }),
-      });
-      const result = await response.json() as { clinicOpen?: boolean; error?: string };
-      if (!response.ok || typeof result.clinicOpen !== 'boolean') {
-        throw new Error(result.error || 'Clinic status could not be updated.');
-      }
-      setClinicOpen(result.clinicOpen);
-      setError('');
-    } catch (caught) {
-      setError(caught instanceof Error ? caught.message : 'Clinic status could not be updated.');
-    } finally {
-      setClinicStatusSaving(false);
-    }
-  };
-
   const saveSlotSettings = async (date: string, settings: SlotSettingsForm) => {
     const token = await getToken();
     if (!token) throw new Error('Sign in to manage appointment availability.');
@@ -290,14 +258,7 @@ export const AdminPanel: React.FC = () => {
 
       <div className="mx-auto w-full max-w-[1500px] px-4 py-5 sm:px-8 sm:py-8">
         <div className="mb-6 flex flex-col justify-between gap-4 sm:flex-row sm:items-center">
-          <div><p className="text-sm font-medium text-[#52635b]">Review appointment requests, contact patients, and manage confirmations.</p><p className="mt-1 text-xs text-[#7b8982]">Changes sync with the public website automatically.</p></div>
-          <div className="flex min-w-0 flex-wrap items-center gap-3 rounded-md border border-[#dce7e1] bg-white px-4 py-3 shadow-sm sm:gap-4">
-            <span className={`h-3 w-3 shrink-0 rounded-full ring-4 ${clinicOpen === null ? 'bg-slate-400 ring-slate-100' : clinicOpen ? 'bg-emerald-600 ring-emerald-100' : 'bg-rose-600 ring-rose-100'}`} />
-            <div className="mr-auto min-w-0 sm:mr-2"><div className="text-xs font-bold tracking-wide">{clinicOpen === null ? 'LOADING STATUS' : clinicOpen ? 'OPEN NOW' : 'CLOSED NOW'}</div><div className="text-[10px] text-[#7b8982]">Live public website status</div></div>
-            <button type="button" disabled={clinicStatusSaving || clinicOpen === null} onClick={() => void updateClinicStatus(!clinicOpen)} className={`min-h-11 shrink-0 rounded-sm px-4 text-xs font-bold text-white disabled:opacity-60 ${clinicOpen ? 'bg-rose-700 hover:bg-rose-800' : 'bg-[#0f4d3c] hover:bg-[#2c7a5f]'}`}>
-              {clinicStatusSaving ? 'Saving...' : clinicOpen === null ? 'Loading...' : clinicOpen ? 'CLOSE NOW' : 'OPEN NOW'}
-            </button>
-          </div>
+          <div><p className="text-sm font-medium text-[#52635b]">Review appointment requests, contact patients, and manage confirmations.</p><p className="mt-1 text-xs text-[#7b8982]">Online appointment requests are available 24/7.</p></div>
         </div>
 
         <section aria-label="Appointment summary" className="mb-6 grid grid-cols-2 gap-3 sm:grid-cols-4">
@@ -317,12 +278,13 @@ export const AdminPanel: React.FC = () => {
         <nav aria-label="Admin sections" className="mb-5 flex gap-1 overflow-x-auto rounded-md border border-[#dce7e1] bg-white p-1 shadow-sm">
           {[
             { id: 'requests', label: 'Appointment requests' },
-            { id: 'completed', label: 'Completed records' },
+            { id: 'priority', label: `Priority appointments (${counts.priority})` },
+            { id: 'completed', label: `Completed records (${counts.completed})` },
             { id: 'calendar', label: 'Calendar & availability' },
             { id: 'content', label: 'Website content' },
             { id: 'reports', label: 'Reports' },
           ].map(({ id, label }) => (
-            <button key={id} type="button" onClick={() => { setActiveTab(id as typeof activeTab); setSelectedId(''); }} className={`min-h-11 shrink-0 rounded-sm px-3 py-2.5 text-xs font-bold sm:px-4 sm:text-sm ${activeTab === id ? 'bg-[#0f4d3c] text-white' : 'text-[#66736f] hover:bg-[#f2f7f4] hover:text-[#0f4d3c]'}`}>{label}</button>
+            <button key={id} type="button" onClick={() => { setActiveTab(id as typeof activeTab); setSelectedId(''); }} className={`min-h-11 min-w-max flex-1 rounded-sm px-3 py-2.5 text-center text-xs font-bold sm:min-w-0 sm:px-4 sm:text-sm ${activeTab === id ? 'bg-[#0f4d3c] text-white' : 'text-[#66736f] hover:bg-[#f2f7f4] hover:text-[#0f4d3c]'}`}>{label}</button>
           ))}
         </nav>
 
@@ -350,8 +312,9 @@ export const AdminPanel: React.FC = () => {
         <section className="grid min-w-0 overflow-hidden rounded-md border border-[#dce7e1] bg-white shadow-sm lg:min-h-[640px] lg:grid-cols-[350px_minmax(0,1fr)]">
           <aside className={`${selected ? 'hidden lg:block' : ''} min-w-0 border-b border-[#dce7e1] lg:border-b-0 lg:border-r`}>
             <div className="border-b border-[#edf1ee] p-4">
-              <div className="mb-3 flex items-center justify-between gap-2"><h2 className="text-sm font-bold">{activeTab === 'completed' ? 'Completed records' : 'Appointment requests'}</h2><span className="text-xs text-[#66736f]">{filteredAppointments.length} shown</span></div>
+              <div className="mb-3 flex items-center justify-between gap-2"><h2 className="text-sm font-bold">{activeTab === 'completed' ? 'Completed records' : activeTab === 'priority' ? 'Priority appointments' : 'Appointment requests'}</h2><span className="text-xs text-[#66736f]">{filteredAppointments.length} shown</span></div>
               {activeTab === 'completed' && <p className="mb-3 text-xs leading-relaxed text-[#66736f]">Completed appointments are kept here for follow-up and record keeping.</p>}
+              {activeTab === 'priority' && <p className="mb-3 text-xs leading-relaxed text-[#66736f]">Appointments with a selected priority category are grouped here for staff review.</p>}
               <label className="flex h-10 items-center gap-2 border border-[#d9e1dc] px-3 text-[#66736f] focus-within:border-[#17645c]">
                 <Search className="h-4 w-4 shrink-0" />
                 <input value={search} onChange={(event) => setSearch(event.target.value)} placeholder="Search patient or reference" className="min-w-0 flex-1 text-xs text-[#17312e] outline-none" />
@@ -387,7 +350,11 @@ export const AdminPanel: React.FC = () => {
                   {getPriorityCategoryLabels(appointment.priority_categories ?? '').length > 0 && <p className="mt-2 text-[10px] font-semibold text-[#17645c]">{getPriorityCategoryLabels(appointment.priority_categories ?? '').join(' · ')}</p>}
                 </button>
               ))}
-              {!loading && filteredAppointments.length === 0 && <p className="p-5 text-sm text-[#66736f]">{appointments.length ? 'No requests match these filters.' : 'No appointment requests yet.'}</p>}
+              {!loading && filteredAppointments.length === 0 && <p className="p-5 text-sm text-[#66736f]">{activeTab === 'completed'
+                ? (appointments.length ? 'No completed records match these filters.' : 'No completed records yet.')
+                : activeTab === 'priority'
+                  ? 'No priority appointments match these filters.'
+                  : (appointments.length ? 'No requests match these filters.' : 'No appointment requests yet.')}</p>}
             </div>
           </aside>
 

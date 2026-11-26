@@ -112,8 +112,6 @@ interface HealthCenterContextValue {
   setActiveSection: (section: string) => void;
   siteContent: PublicSiteContent;
   siteContentError: string;
-  clinicOpen: boolean | null;
-  clinicStatusError: string;
   isSignedIn: boolean;
   authModalOpen: boolean;
   setAuthModalOpen: (open: boolean) => void;
@@ -166,8 +164,6 @@ export const HealthCenterProvider: React.FC<{ children: ReactNode }> = ({ childr
   const [activeSection, setActiveSectionState] = useState('overview');
   const [siteContent, setSiteContent] = useState(DEFAULT_SITE_CONTENT);
   const [siteContentError, setSiteContentError] = useState('');
-  const [clinicOpen, setClinicOpen] = useState<boolean | null>(null);
-  const [clinicStatusError, setClinicStatusError] = useState('');
   const [appointmentRequestAvailability, setAppointmentRequestAvailability] = useState<AppointmentRequestAvailability>(
     () => isSignedIn ? 'checking' : 'available',
   );
@@ -259,26 +255,8 @@ export const HealthCenterProvider: React.FC<{ children: ReactNode }> = ({ childr
         if (active) setSiteContentError('Clinic information could not be refreshed.');
       }
     };
-    const loadClinicStatus = async () => {
-      try {
-        const response = await fetch('/api/admin?mode=clinic_status', { cache: 'no-store' });
-        const result = await response.json() as { clinicOpen?: boolean; error?: string };
-        if (!response.ok || typeof result.clinicOpen !== 'boolean') {
-          throw new Error(result.error || 'Clinic status could not be loaded.');
-        }
-        if (!active) return;
-        setClinicOpen(result.clinicOpen);
-        setClinicStatusError('');
-      } catch (caught) {
-        if (!active) return;
-        setClinicStatusError(caught instanceof Error ? caught.message : 'Clinic status could not be loaded.');
-      }
-    };
     const refreshPublicContent = () => {
-      if (document.visibilityState === 'visible') {
-        void loadSiteContent();
-        void loadClinicStatus();
-      }
+      if (document.visibilityState === 'visible') void loadSiteContent();
     };
     refreshPublicContent();
     const timer = window.setInterval(refreshPublicContent, 60_000);
@@ -307,19 +285,6 @@ export const HealthCenterProvider: React.FC<{ children: ReactNode }> = ({ childr
         headers: { Authorization: `Bearer ${token}` },
         cache: 'no-store',
       });
-    };
-    const loadClinicStatus = async () => {
-      try {
-        const response = await requestWithToken('/api/admin?mode=clinic_status');
-        const result = await response.json() as { clinicOpen?: boolean; error?: string };
-        if (!response.ok || typeof result.clinicOpen !== 'boolean') throw new Error(result.error || 'Clinic status could not be loaded.');
-        if (!active) return;
-        setClinicOpen(result.clinicOpen);
-        setClinicStatusError('');
-      } catch (caught) {
-        if (!active) return;
-        setClinicStatusError(caught instanceof Error ? caught.message : 'Clinic status could not be loaded.');
-      }
     };
     const loadAppointments = async () => {
       try {
@@ -365,7 +330,7 @@ export const HealthCenterProvider: React.FC<{ children: ReactNode }> = ({ childr
       if (refreshInProgress || document.visibilityState === 'hidden') return;
       refreshInProgress = true;
       try {
-        await Promise.all([loadClinicStatus(), loadAppointments(), loadUnreadMessages()]);
+        await Promise.all([loadAppointments(), loadUnreadMessages()]);
       } finally {
         refreshInProgress = false;
       }
@@ -409,8 +374,6 @@ export const HealthCenterProvider: React.FC<{ children: ReactNode }> = ({ childr
       setActiveSection,
       siteContent,
       siteContentError,
-      clinicOpen,
-      clinicStatusError,
       isSignedIn: Boolean(isSignedIn),
       authModalOpen,
       setAuthModalOpen,
