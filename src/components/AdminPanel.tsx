@@ -147,6 +147,7 @@ export const AdminPanel: React.FC = () => {
         appointment.phone,
         appointment.address ?? '',
         appointment.chief_complaint ?? '',
+        String(appointment.age ?? ''),
         getPriorityCategoryLabels(appointment.priority_categories ?? '').join(' '),
       ].some((value) => String(value ?? '').toLowerCase().includes(query));
       return matchesStatus && matchesDate && matchesService && matchesPriority && matchesSearch;
@@ -165,7 +166,7 @@ export const AdminPanel: React.FC = () => {
   const performAction = async (action: string, appointment: AppointmentRow) => {
     if (action === 'delete_chat' && !window.confirm('Archive this conversation for the patient? Messages will remain available in admin records, and the appointment request will be kept.')) return;
     if (action === 'delete_appointment' && !window.confirm(`Permanently delete the appointment request for ${appointment.patient_name} (${appointment.reference_code}) and its messages? This cannot be undone.`)) return;
-    if (action === 'complete' && !window.confirm('Mark this appointment as completed? It will be removed from the public Dates and Time Slots schedule but remain in admin records.')) return;
+    if (action === 'complete' && !window.confirm('Mark this appointment as completed? The patient chat will close, and the request will move to Completed records.')) return;
     if (action === 'approve') {
       const dateSettings = slotSettings.filter((setting) => setting.appointment_date === appointment.preferred_date);
       const fullDateBlocked = dateSettings.some((setting) => setting.time_slot === 'all_day' && Number(setting.blocked) === 1);
@@ -313,8 +314,13 @@ export const AdminPanel: React.FC = () => {
           <aside className={`${selected ? 'hidden lg:block' : ''} min-w-0 border-b border-[#dce7e1] lg:border-b-0 lg:border-r`}>
             <div className="border-b border-[#edf1ee] p-4">
               <div className="mb-3 flex items-center justify-between gap-2"><h2 className="text-sm font-bold">{activeTab === 'completed' ? 'Completed records' : activeTab === 'priority' ? 'Priority appointments' : 'Appointment requests'}</h2><span className="text-xs text-[#66736f]">{filteredAppointments.length} shown</span></div>
-              {activeTab === 'completed' && <p className="mb-3 text-xs leading-relaxed text-[#66736f]">Completed appointments are kept here for follow-up and record keeping.</p>}
-              {activeTab === 'priority' && <p className="mb-3 text-xs leading-relaxed text-[#66736f]">Appointments with a selected priority category are grouped here for staff review.</p>}
+              {activeTab === 'completed' && (
+                <div className="mb-3 flex flex-wrap items-center justify-between gap-2">
+                  <p className="text-xs leading-relaxed text-[#66736f]">Completed requests are archived here and removed from the appointment request and priority lists.</p>
+                  <button type="button" onClick={() => exportCompletedAppointments(filteredAppointments)} disabled={filteredAppointments.length === 0} className="min-h-11 rounded-sm bg-[#17645c] px-4 text-xs font-bold text-white hover:bg-[#104f49] disabled:cursor-not-allowed disabled:opacity-50">Export completed records ({filteredAppointments.length})</button>
+                </div>
+              )}
+              {activeTab === 'priority' && <p className="mb-3 text-xs leading-relaxed text-[#66736f]">Requests marked PWD, senior citizen, or pregnant/lactating are listed here for staff attention.</p>}
               <label className="flex h-10 items-center gap-2 border border-[#d9e1dc] px-3 text-[#66736f] focus-within:border-[#17645c]">
                 <Search className="h-4 w-4 shrink-0" />
                 <input value={search} onChange={(event) => setSearch(event.target.value)} placeholder="Search patient or reference" className="min-w-0 flex-1 text-xs text-[#17312e] outline-none" />
@@ -340,7 +346,6 @@ export const AdminPanel: React.FC = () => {
                   {services.map((service) => <option key={service} value={service}>{service}</option>)}
                 </select>
               </label>
-              {activeTab === 'completed' && <button type="button" disabled={filteredAppointments.length === 0} onClick={() => exportCompletedAppointments(filteredAppointments)} className="mt-3 min-h-11 w-full bg-[#17645c] px-3 text-xs font-bold text-white hover:bg-[#104f49] disabled:cursor-not-allowed disabled:opacity-50">Export filtered records (CSV)</button>}
             </div>
             <div className="max-h-[420px] overflow-y-auto lg:max-h-[calc(100vh-360px)]">
               {loading ? <p className="p-5 text-sm text-[#66736f]">Loading requests...</p> : filteredAppointments.map((appointment) => (
@@ -369,11 +374,12 @@ export const AdminPanel: React.FC = () => {
               <div className="grid min-h-0 xl:min-h-[640px] xl:grid-cols-[minmax(230px,0.7fr)_minmax(320px,1.3fr)]">
                 <div className="min-w-0 border-b border-[#dfe6e1] bg-white p-4 sm:p-5 xl:border-b-0 xl:border-r">
                   <button type="button" onClick={() => setSelectedId('')} className="mb-4 flex items-center gap-1 text-xs font-bold text-[#17645c] lg:hidden"><ChevronLeft className="h-4 w-4" />Back to requests</button>
-                  <div className="flex items-start justify-between gap-3"><div><div className="text-[11px] font-bold uppercase tracking-wide text-[#17645c]">Request details</div><div className="mt-1 font-mono text-xs text-[#66736f]">{selected.reference_code}</div></div><span className={`px-2 py-1 text-[10px] font-bold uppercase ${selected.status === 'confirmed' ? 'bg-emerald-100 text-emerald-800' : selected.status === 'completed' ? 'bg-sky-100 text-sky-800' : selected.status === 'cancelled' || selected.status === 'rejected' ? 'bg-rose-100 text-rose-800' : 'bg-amber-100 text-amber-800'}`}>{selected.status}</span></div>
+                  <div className="flex items-start justify-between gap-3"><div><div className="text-[11px] font-bold uppercase tracking-wide text-[#17645c]">{['completed', 'cancelled', 'rejected'].includes(selected.status) ? 'Appointment history' : 'Request details'}</div><div className="mt-1 font-mono text-xs text-[#66736f]">{selected.reference_code}</div></div><span className={`px-2 py-1 text-[10px] font-bold uppercase ${selected.status === 'confirmed' ? 'bg-emerald-100 text-emerald-800' : selected.status === 'completed' ? 'bg-sky-100 text-sky-800' : selected.status === 'cancelled' || selected.status === 'rejected' ? 'bg-rose-100 text-rose-800' : 'bg-amber-100 text-amber-800'}`}>{selected.status}</span></div>
                   <h2 className="mt-5 break-words text-xl font-bold">{selected.patient_name}</h2>
                   <p className="mt-1 break-words text-sm text-[#66736f]">{selected.service_name}</p>
                   <dl className="mt-6 space-y-4 border-y border-[#edf1ee] py-5 text-sm">
                     <div><dt className="text-[11px] font-bold uppercase tracking-wide text-[#87938c]">Preferred appointment</dt><dd className="mt-1 font-medium">{selected.preferred_date} · {formatAppointmentTime(selected.preferred_time)}</dd></div>
+                    {selected.completed_at && <div><dt className="text-[11px] font-bold uppercase tracking-wide text-[#87938c]">Marked completed</dt><dd className="mt-1 font-medium">{new Intl.DateTimeFormat('en-US', { timeZone: 'Asia/Manila', dateStyle: 'medium', timeStyle: 'short' }).format(new Date(selected.completed_at))}</dd></div>}
                     <div><dt className="text-[11px] font-bold uppercase tracking-wide text-[#87938c]">Barangay</dt><dd className="mt-1 font-medium">{selected.zone}</dd></div>
                     <div><dt className="text-[11px] font-bold uppercase tracking-wide text-[#87938c]">Contact number</dt><dd className="mt-1 font-medium">{selected.phone}</dd></div>
                     {selected.email && <div><dt className="text-[11px] font-bold uppercase tracking-wide text-[#87938c]">Email</dt><dd className="mt-1 break-all font-medium">{selected.email}</dd></div>}
@@ -387,14 +393,14 @@ export const AdminPanel: React.FC = () => {
                     <button type="button" disabled={selected.status === 'rejected' || selected.status === 'cancelled' || selected.status === 'completed'} onClick={() => void performAction('reject', selected)} className="flex min-h-11 items-center justify-center gap-2 border border-rose-200 px-2 text-sm font-bold text-rose-700 hover:bg-rose-50 disabled:cursor-not-allowed disabled:opacity-50"><X className="h-4 w-4 shrink-0" />Reject request</button>
                     {selected.status === 'confirmed' && <button type="button" onClick={() => void performAction('complete', selected)} className="flex min-h-11 items-center justify-center gap-2 border border-sky-200 px-2 text-sm font-bold text-sky-800 hover:bg-sky-50"><CheckCircle2 className="h-4 w-4 shrink-0" />Mark completed / remove from schedule</button>}
                     <button type="button" onClick={() => void performAction('delete_appointment', selected)} className="flex min-h-11 items-center justify-center gap-2 border border-rose-300 px-2 text-sm font-bold text-rose-800 hover:bg-rose-50"><Trash2 className="h-4 w-4 shrink-0" />Delete appointment record</button>
-                    {selected.chat_status !== 'deleted' && <button type="button" onClick={() => void performAction(selected.chat_status === 'closed' ? 'chat_open' : 'chat_close', selected)} className="flex min-h-11 items-center justify-center gap-2 border border-[#d9e1dc] px-2 text-sm font-bold hover:bg-[#f4f6f3]"><LockKeyhole className="h-4 w-4 shrink-0" />{selected.chat_status === 'closed' ? 'Open patient chat' : 'Close patient chat'}</button>}
+                    {selected.status !== 'completed' && selected.chat_status !== 'deleted' && <button type="button" onClick={() => void performAction(selected.chat_status === 'closed' ? 'chat_open' : 'chat_close', selected)} className="flex min-h-11 items-center justify-center gap-2 border border-[#d9e1dc] px-2 text-sm font-bold hover:bg-[#f4f6f3]"><LockKeyhole className="h-4 w-4 shrink-0" />{selected.chat_status === 'closed' ? 'Open patient chat' : 'Close patient chat'}</button>}
                   </div>
                 </div>
 
                 <div className="flex min-h-[380px] min-w-0 flex-col sm:min-h-[520px]">
                   <div className="flex min-w-0 items-center gap-2 border-b border-[#dfe6e1] bg-white px-3 py-3 sm:gap-3 sm:px-5 sm:py-4">
                     <div className="flex h-9 w-9 items-center justify-center bg-[#edf3ef] text-[#17645c]"><MessageCircle className="h-4 w-4" /></div>
-                    <div className="min-w-0"><h3 className="text-sm font-bold">Patient conversation</h3><p className="mt-0.5 text-[11px] text-[#66736f]">{selected.chat_status === 'deleted' ? 'Deleted for both accounts' : selected.chat_status === 'closed' ? 'Open chat to send messages' : 'Chat is open with the patient'}</p></div>
+                    <div className="min-w-0"><h3 className="text-sm font-bold">Patient conversation</h3><p className="mt-0.5 text-[11px] text-[#66736f]">{selected.chat_status === 'deleted' ? 'Deleted for both accounts' : selected.status === 'completed' ? 'Chat closed for completed appointment' : selected.chat_status === 'closed' ? 'Open chat to send messages' : 'Chat is open with the patient'}</p></div>
                     {selected.chat_status !== 'deleted' && <button type="button" onClick={() => void performAction('delete_chat', selected)} className="ml-auto inline-flex items-center gap-1.5 border border-rose-200 px-3 py-2 text-xs font-bold text-rose-700 hover:bg-rose-50" title="Delete this chat for both accounts"><Trash2 className="h-4 w-4" /><span className="hidden sm:inline">Delete chat</span></button>}
                   </div>
                   <div className="min-h-0 flex-1 space-y-3 overflow-y-auto px-3 py-4 sm:px-5 sm:py-5">
@@ -405,7 +411,7 @@ export const AdminPanel: React.FC = () => {
                   </div>
                   {selected.chat_status === 'open' ? (
                     <form onSubmit={sendMessage} className="flex shrink-0 gap-2 border-t border-[#dfe6e1] bg-white p-2.5 sm:p-4"><input value={chatInput} onChange={(event) => setChatInput(event.target.value)} maxLength={2000} placeholder="Write a message to the patient..." className="h-11 min-w-0 flex-1 border border-[#d9e1dc] px-3 text-sm outline-none focus:border-[#17645c] sm:px-4" /><button type="submit" disabled={!chatInput.trim()} aria-label="Send message" className="flex h-11 w-11 shrink-0 items-center justify-center bg-[#17645c] text-white hover:bg-[#104f49] disabled:opacity-50"><Send className="h-4 w-4" /></button></form>
-                  ) : <div className="border-t border-[#dfe6e1] bg-white px-5 py-4 text-center text-xs text-[#66736f]">{selected.chat_status === 'deleted' ? 'This conversation has been deleted and cannot be reopened.' : 'This conversation is closed. Open patient chat to reply.'}</div>}
+                  ) : <div className="border-t border-[#dfe6e1] bg-white px-5 py-4 text-center text-xs text-[#66736f]">{selected.chat_status === 'deleted' ? 'This conversation has been deleted and cannot be reopened.' : selected.status === 'completed' ? 'This conversation is closed because the appointment is completed.' : 'This conversation is closed. Open patient chat to reply.'}</div>}
                 </div>
               </div>
             )}
