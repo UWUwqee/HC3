@@ -247,7 +247,7 @@ export const AdminPanel: React.FC = () => {
 
       <div className="mx-auto w-full max-w-[1500px] px-4 py-5 sm:px-8 sm:py-8">
         <div className="mb-6 flex flex-col justify-between gap-4 sm:flex-row sm:items-center">
-          <div><p className="text-sm font-medium text-[#52635b]">Review appointment requests, contact patients, and manage confirmations.</p><p className="mt-1 text-xs text-[#7b8982]">Online appointment requests are available 24/7.</p></div>
+          <div><p className="text-sm font-medium text-[#52635b]">Review appointment requests, contact patients, and manage confirmations.</p><p className="mt-1 text-xs text-[#7b8982]">Online requests are available 24/7. Appointment times run 9:00 AM–2:00 PM in half-hour intervals.</p></div>
         </div>
 
         <section aria-label="Appointment summary" className="mb-6 grid grid-cols-2 gap-3 sm:grid-cols-3">

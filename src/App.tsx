@@ -52,7 +52,7 @@ const AppContent: React.FC = () => {
       <Header />
 
       {(appointmentRequestAvailability === 'pending' || appointmentRequestAvailability === 'confirmed') && (
-        <div role="status" aria-live="polite" className={`border-b px-4 py-3 text-center text-sm font-semibold ${appointmentRequestAvailability === 'pending' ? 'border-amber-200 bg-amber-50 text-amber-950' : 'border-emerald-200 bg-emerald-50 text-emerald-950'}`}>
+        <div role="status" aria-live="polite" className={`hidden border-b px-4 py-3 text-center text-sm font-semibold sm:block ${appointmentRequestAvailability === 'pending' ? 'border-amber-200 bg-amber-50 text-amber-950' : 'border-emerald-200 bg-emerald-50 text-emerald-950'}`}>
           {appointmentRequestAvailability === 'pending'
             ? (language === 'fil'
               ? 'May appointment request ka pang naghihintay ng pagsusuri ng kawani.'

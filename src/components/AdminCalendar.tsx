@@ -161,8 +161,8 @@ export const AdminCalendar: React.FC<AdminCalendarProps> = ({
       ? `${formatDate(calendarDays[0], { month: 'short', day: 'numeric' })} – ${formatDate(calendarDays[6], { month: 'short', day: 'numeric', year: 'numeric' })}`
       : formatDate(selectedDate, { weekday: 'long', month: 'long', day: 'numeric', year: 'numeric' });
   const timeSlots = [
-    { id: 'morning', label: 'Morning', field: 'morningBlocked' as const, blocked: form.morningBlocked },
-    { id: 'afternoon', label: 'Afternoon', field: 'afternoonBlocked' as const, blocked: form.afternoonBlocked },
+    { id: 'morning', label: 'Morning · 9:00 AM–11:30 AM', field: 'morningBlocked' as const, blocked: form.morningBlocked },
+    { id: 'afternoon', label: 'Afternoon · 12:00–2:00 PM', field: 'afternoonBlocked' as const, blocked: form.afternoonBlocked },
     { id: 'no preference', label: 'No preference', field: 'noPreferenceBlocked' as const, blocked: form.noPreferenceBlocked },
   ];
 
