@@ -3,6 +3,13 @@ import { createClient } from '@libsql/client';
 import { randomBytes, randomUUID } from 'node:crypto';
 import type { IncomingMessage, ServerResponse } from 'node:http';
 import { COVERAGE_AREAS } from '../src/data/masikapClinicInfo.ts';
+import {
+  APPOINTMENT_TIME_SLOTS,
+  formatAppointmentTime,
+  getAppointmentTimePeriod,
+  getEarliestAppointmentDate,
+  isAppointmentTimeAvailable,
+} from '../src/appointmentSchedule.ts';
 import { ensureSiteContent, getContentDatabase } from './site-content-store.ts';
 import { verifyClerkToken } from './clerk-auth.ts';
 
@@ -13,7 +20,8 @@ type ApiResponse = ServerResponse & {
 };
 
 const zones = new Set(COVERAGE_AREAS);
-const preferredTimes = new Set(['morning', 'afternoon']);
+const preferredTimes = new Set(APPOINTMENT_TIME_SLOTS);
+const priorityCategoryOptions = new Set(['pwd', 'senior_citizen', 'pregnant_lactating']);
 
 let database: ReturnType<typeof createClient> | undefined;
 
@@ -50,6 +58,11 @@ async function ensureAppointmentTable(db: ReturnType<typeof createClient>) {
       patient_name TEXT NOT NULL,
       phone TEXT NOT NULL,
       email TEXT,
+      address TEXT,
+      chief_complaint TEXT,
+      age INTEGER,
+      priority_categories TEXT NOT NULL DEFAULT '',
+      attendance_consent INTEGER NOT NULL DEFAULT 0,
       zone TEXT NOT NULL,
       service_id TEXT NOT NULL,
       service_name TEXT NOT NULL,
@@ -58,7 +71,8 @@ async function ensureAppointmentTable(db: ReturnType<typeof createClient>) {
       privacy_consent INTEGER NOT NULL,
       status TEXT NOT NULL DEFAULT 'pending',
       chat_status TEXT NOT NULL DEFAULT 'closed',
-      created_at TEXT NOT NULL
+      created_at TEXT NOT NULL,
+      completed_at TEXT
     )
   `);
   const columns = await db.execute('PRAGMA table_info(appointment_requests)');
@@ -69,6 +83,16 @@ async function ensureAppointmentTable(db: ReturnType<typeof createClient>) {
   if (!columnNames.has('chat_status')) {
     await db.execute("ALTER TABLE appointment_requests ADD COLUMN chat_status TEXT NOT NULL DEFAULT 'closed'");
   }
+  if (!columnNames.has('address')) await db.execute('ALTER TABLE appointment_requests ADD COLUMN address TEXT');
+  if (!columnNames.has('chief_complaint')) await db.execute('ALTER TABLE appointment_requests ADD COLUMN chief_complaint TEXT');
+  if (!columnNames.has('age')) await db.execute('ALTER TABLE appointment_requests ADD COLUMN age INTEGER');
+  if (!columnNames.has('priority_categories')) {
+    await db.execute("ALTER TABLE appointment_requests ADD COLUMN priority_categories TEXT NOT NULL DEFAULT ''");
+  }
+  if (!columnNames.has('attendance_consent')) {
+    await db.execute('ALTER TABLE appointment_requests ADD COLUMN attendance_consent INTEGER NOT NULL DEFAULT 0');
+  }
+  if (!columnNames.has('completed_at')) await db.execute('ALTER TABLE appointment_requests ADD COLUMN completed_at TEXT');
   await db.execute(`
     CREATE TABLE IF NOT EXISTS appointment_slot_settings (
       appointment_date TEXT NOT NULL,
@@ -84,6 +108,17 @@ async function ensureAppointmentTable(db: ReturnType<typeof createClient>) {
       setting_key TEXT PRIMARY KEY,
       setting_value TEXT NOT NULL,
       updated_at TEXT NOT NULL
+    )
+  `);
+  await db.execute(`
+    CREATE TABLE IF NOT EXISTS appointment_messages (
+      id TEXT PRIMARY KEY,
+      appointment_id TEXT NOT NULL,
+      sender_uid TEXT NOT NULL,
+      sender_role TEXT NOT NULL,
+      sender_name TEXT NOT NULL,
+      message TEXT NOT NULL,
+      created_at TEXT NOT NULL
     )
   `);
   await db.execute({
@@ -117,6 +152,42 @@ export default async function handler(request: ApiRequest, response: ApiResponse
         time: String(row.preferred_time),
         bookedCount: Number(row.booked_count),
       }));
+      const priorityResult = await db.execute(`
+        SELECT preferred_date, preferred_time, COUNT(*) AS priority_count
+        FROM appointment_requests
+        WHERE status = 'confirmed' AND priority_categories != ''
+        GROUP BY preferred_date, preferred_time
+        ORDER BY preferred_date ASC, preferred_time ASC
+      `);
+      const serviceAppointments = await db.execute(`
+        SELECT preferred_date, preferred_time, service_id, service_name, priority_categories
+        FROM appointment_requests
+        WHERE status = 'confirmed'
+        ORDER BY preferred_date ASC, preferred_time ASC, service_name ASC
+      `);
+      const regularServicesBySlot = new Map<string, Array<{ id: string; name: string }>>();
+      const priorityServicesBySlot = new Map<string, Array<{ id: string; name: string }>>();
+      for (const appointment of serviceAppointments.rows) {
+        const key = `${String(appointment.preferred_date)}:${String(appointment.preferred_time)}`;
+        const isPriority = String(appointment.priority_categories ?? '').trim() !== '';
+        const servicesBySlot = isPriority ? priorityServicesBySlot : regularServicesBySlot;
+        const services = servicesBySlot.get(key) ?? [];
+        const serviceId = String(appointment.service_id);
+        if (!services.some((service) => service.id === serviceId)) {
+          services.push({ id: serviceId, name: String(appointment.service_name) });
+          servicesBySlot.set(key, services);
+        }
+      }
+      const prioritySlots = priorityResult.rows.map((row) => ({
+        date: String(row.preferred_date),
+        time: String(row.preferred_time),
+        priorityCount: Number(row.priority_count),
+        services: priorityServicesBySlot.get(`${String(row.preferred_date)}:${String(row.preferred_time)}`) ?? [],
+      }));
+      const slotsWithServices = slots.map((slot) => ({
+        ...slot,
+        services: regularServicesBySlot.get(`${slot.date}:${slot.time}`) ?? [],
+      }));
       const settingResult = await db.execute({
         sql: `SELECT appointment_date, time_slot, capacity, blocked
               FROM appointment_slot_settings
@@ -130,15 +201,37 @@ export default async function handler(request: ApiRequest, response: ApiResponse
         capacity: Number(row.capacity),
         blocked: Number(row.blocked) === 1,
       }));
+      const unavailableResult = await db.execute({
+        sql: `SELECT preferred_date, preferred_time,
+                     MAX(CASE WHEN priority_categories = '' THEN 1 ELSE 0 END) AS has_regular_booking,
+                     MAX(CASE WHEN priority_categories != '' THEN 1 ELSE 0 END) AS has_priority_booking
+              FROM appointment_requests
+              WHERE status IN ('pending', 'confirmed') AND preferred_date >= ?
+              GROUP BY preferred_date, preferred_time
+              ORDER BY preferred_date ASC, preferred_time ASC`,
+        args: [new Intl.DateTimeFormat('en-CA', { timeZone: 'Asia/Manila' }).format(new Date())],
+      });
+      const unavailableSlots = unavailableResult.rows.map((row) => ({
+        date: String(row.preferred_date),
+        time: String(row.preferred_time),
+        hasRegularBooking: Number(row.has_regular_booking) === 1,
+        hasPriorityBooking: Number(row.has_priority_booking) === 1,
+      }));
 
       if (decoded) {
         const appointments = await db.execute({
           sql: `SELECT * FROM appointment_requests WHERE owner_uid = ? ORDER BY preferred_date ASC, preferred_time ASC`,
           args: [decoded.uid],
         });
-        return response.status(200).json({ slots, slotSettings, appointments: appointments.rows });
+        return response.status(200).json({
+          slots: slotsWithServices,
+          prioritySlots,
+          slotSettings,
+          unavailableSlots,
+          appointments: appointments.rows,
+        });
       }
-      return response.status(200).json({ slots, slotSettings });
+      return response.status(200).json({ slots: slotsWithServices, prioritySlots, slotSettings, unavailableSlots });
     } catch {
       return response.status(500).json({ error: 'Schedule data could not be loaded.' });
     }
@@ -164,6 +257,10 @@ export default async function handler(request: ApiRequest, response: ApiResponse
   const patientName = text(body.patientName, 120);
   const phone = text(body.phone, 32);
   const email = text(body.email, 254).toLowerCase();
+  const address = text(body.address, 250);
+  const chiefComplaint = text(body.chiefComplaint, 2000);
+  const age = body.age;
+  const requestedCategories = body.priorityCategories;
   const zone = text(body.zone, 40);
   const serviceId = text(body.serviceId, 40);
   const preferredDate = text(body.preferredDate, 10);
@@ -187,21 +284,41 @@ export default async function handler(request: ApiRequest, response: ApiResponse
   const dateIsValid = /^\d{4}-\d{2}-\d{2}$/.test(preferredDate)
     && !Number.isNaN(Date.parse(`${preferredDate}T00:00:00Z`))
     && new Date(`${preferredDate}T00:00:00Z`).toISOString().slice(0, 10) === preferredDate;
-  const today = new Intl.DateTimeFormat('en-CA', {
-    timeZone: 'Asia/Manila',
-    year: 'numeric',
-    month: '2-digit',
-    day: '2-digit',
-  }).format(new Date());
+  const now = new Date();
+  const earliestAppointmentDate = getEarliestAppointmentDate(now);
+  const priorityCategories = Array.isArray(requestedCategories)
+    ? requestedCategories.filter((category: unknown): category is string => typeof category === 'string')
+    : [];
 
   if (patientName.length < 2) return response.status(400).json({ error: 'Enter a valid full name.' });
   if (phoneDigits.length < 7) return response.status(400).json({ error: 'Enter a contact number with at least 7 digits.' });
   if (email && !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email)) return response.status(400).json({ error: 'Enter a valid email address or leave it blank.' });
+  if (address.length < 5) return response.status(400).json({ error: 'Enter a valid home address.' });
+  if (chiefComplaint.length < 2) return response.status(400).json({ error: 'Describe your reason for the visit.' });
+  if (typeof age !== 'number' || !Number.isInteger(age) || age < 0 || age > 120) {
+    return response.status(400).json({ error: 'Enter a valid age from 0 to 120.' });
+  }
+  if (!Array.isArray(requestedCategories)
+    || priorityCategories.length !== requestedCategories.length
+    || priorityCategories.some((category) => !priorityCategoryOptions.has(category))
+    || new Set(priorityCategories).size !== priorityCategories.length) {
+    return response.status(400).json({ error: 'Choose valid priority categories.' });
+  }
+  if (age < 60 && priorityCategories.includes('senior_citizen')) {
+    return response.status(400).json({ error: 'Senior citizen priority is available to patients aged 60 and above.' });
+  }
+  if (age >= 60 && !priorityCategories.includes('senior_citizen')) priorityCategories.push('senior_citizen');
   if (!zones.has(zone)) return response.status(400).json({ error: 'Select a valid zone or barangay.' });
   if (!/^[a-zA-Z0-9_-]{1,40}$/.test(serviceId)) return response.status(400).json({ error: 'Select a valid service.' });
-  if (!dateIsValid || preferredDate < today) return response.status(400).json({ error: 'Choose a valid appointment date that is today or later.' });
-  if (!preferredTimes.has(preferredTime)) return response.status(400).json({ error: 'Select a valid time slot.' });
+  if (!dateIsValid || preferredDate < earliestAppointmentDate) {
+    return response.status(400).json({ error: `Choose an appointment date on or after ${earliestAppointmentDate} (Philippines time).` });
+  }
+  if (!preferredTimes.has(preferredTime)) return response.status(400).json({ error: 'Select a half-hour appointment time between 9:00 AM and 2:00 PM.' });
+  if (!isAppointmentTimeAvailable(preferredDate, preferredTime, now)) {
+    return response.status(400).json({ error: `Choose an appointment time that has not passed today. Today's date is available until 2:00 PM (Philippines time).` });
+  }
   if (body.privacyConsent !== true) return response.status(400).json({ error: 'Please agree to the contact and privacy consent.' });
+  if (body.attendanceConsent !== true) return response.status(400).json({ error: 'Please acknowledge the appointment attendance reminder.' });
 
   const db = getDatabase();
   if (!db) return response.status(503).json({ error: 'Appointment requests are temporarily unavailable.' });
@@ -224,45 +341,89 @@ export default async function handler(request: ApiRequest, response: ApiResponse
     const service = JSON.parse(String(serviceResult.rows[0].content_json)) as { title?: unknown };
     const serviceName = typeof service.title === 'string' ? service.title.trim().slice(0, 160) : '';
     if (!serviceName) return response.status(400).json({ error: 'The selected service is not configured for appointment requests.' });
-    const clinicStatus = await db.execute("SELECT setting_value FROM clinic_settings WHERE setting_key = 'clinic_open'");
-    if (clinicStatus.rows[0]?.setting_value !== '1') {
-      return response.status(409).json({ error: 'Appointment requests are currently closed by the health center.' });
-    }
-    const slotSettings = await db.execute({
-      sql: `SELECT time_slot, blocked FROM appointment_slot_settings
-            WHERE appointment_date = ? AND time_slot IN ('all_day', ?)`,
-      args: [preferredDate, preferredTime],
-    });
-    if (slotSettings.rows.some((setting) => Number(setting.blocked) === 1)) {
-      return response.status(409).json({ error: 'The selected date or time slot is unavailable. Please choose another.' });
-    }
     const transaction = await db.transaction('write');
     try {
-      const pending = await transaction.execute({
-        sql: `SELECT reference_code, preferred_date, preferred_time
+      const activeAppointment = await transaction.execute({
+        sql: `SELECT reference_code, preferred_date, preferred_time, status
               FROM appointment_requests
-              WHERE owner_uid = ? AND status = 'pending'
+              WHERE owner_uid = ? AND status IN ('pending', 'confirmed')
               ORDER BY created_at DESC LIMIT 1`,
         args: [ownerUid],
       });
-      if (pending.rows[0]) {
-        const existing = pending.rows[0];
+      if (activeAppointment.rows[0]) {
+        const existing = activeAppointment.rows[0];
         await transaction.commit();
         return response.status(409).json({
-          error: 'You already have an appointment request waiting for review.',
-          pendingRequest: {
+          error: String(existing.status) === 'confirmed'
+            ? 'You already have an accepted appointment. Complete or cancel it before requesting another.'
+            : 'You already have an appointment request waiting for review.',
+          activeAppointment: {
             referenceCode: String(existing.reference_code),
             preferredDate: String(existing.preferred_date),
             preferredTime: String(existing.preferred_time),
+            status: String(existing.status),
           },
         });
       }
+      const prioritySlotFilter = priorityCategories.length > 0 ? "AND priority_categories != ''" : '';
+      const occupiedSlot = await transaction.execute({
+        sql: `SELECT 1 FROM appointment_requests
+              WHERE preferred_date = ? AND preferred_time = ?
+                AND status IN ('pending', 'confirmed')
+                ${prioritySlotFilter}
+              LIMIT 1`,
+        args: [preferredDate, preferredTime],
+      });
+      if (occupiedSlot.rows[0]) {
+        await transaction.commit();
+        return response.status(409).json({ error: 'This appointment time has already been booked. Please choose another time.' });
+      }
+      const period = getAppointmentTimePeriod(preferredTime);
+      const slotSettings = await transaction.execute({
+        sql: `SELECT time_slot, capacity, blocked FROM appointment_slot_settings
+              WHERE appointment_date = ? AND time_slot IN ('all_day', ?, ?)`,
+        args: [preferredDate, preferredTime, period],
+      });
+      if (slotSettings.rows.some((setting) => Number(setting.blocked) === 1)) {
+        await transaction.commit();
+        return response.status(409).json({ error: 'The selected date or time slot is unavailable. Please choose another.' });
+      }
+      const periodSetting = slotSettings.rows.find((setting) => String(setting.time_slot) === period);
+      const capacity = Number(periodSetting?.capacity ?? 0);
+      if (capacity > 0) {
+        const confirmedAppointments = await transaction.execute({
+          sql: `SELECT preferred_time FROM appointment_requests
+                WHERE preferred_date = ? AND status = 'confirmed'`,
+          args: [preferredDate],
+        });
+        const acceptedCount = confirmedAppointments.rows.filter((appointment) => (
+          getAppointmentTimePeriod(String(appointment.preferred_time)) === period
+        )).length;
+        if (acceptedCount >= capacity) {
+          await transaction.commit();
+          return response.status(409).json({ error: 'This appointment period has reached its limit. Please choose another time.' });
+        }
+      }
+      const status = 'confirmed';
+      const appointmentTime = formatAppointmentTime(preferredTime);
+      const message = `This is an automated message.\n\nYour appointment for ${serviceName} on ${preferredDate} at ${appointmentTime} has been automatically confirmed. You can view the schedule in your appointment chat.\n\nFilipino:\nAwtomatikong mensahe ito. Kumpirmado na ang iyong appointment para sa ${serviceName} sa ${preferredDate}, ganap na ${appointmentTime}. Maaari mong tingnan ang iskedyul sa chat ng iyong appointment.`;
       await transaction.execute({
         sql: `INSERT INTO appointment_requests (
-          id, owner_uid, reference_code, patient_name, phone, email, zone, service_id,
-          service_name, preferred_date, preferred_time, privacy_consent, status, chat_status, created_at
-        ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, 1, 'pending', 'closed', ?)`,
-        args: [id, ownerUid, referenceCode, patientName, phone, email || null, zone, serviceId, serviceName, preferredDate, preferredTime, createdAt],
+          id, owner_uid, reference_code, patient_name, phone, email, address, chief_complaint, age,
+          priority_categories, attendance_consent, zone, service_id, service_name, preferred_date,
+          preferred_time, privacy_consent, status, chat_status, created_at
+        ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, 1, ?, 'open', ?)`,
+        args: [
+          id, ownerUid, referenceCode, patientName, phone, email || null, address, chiefComplaint, age,
+          priorityCategories.join(','), body.attendanceConsent ? 1 : 0, zone, serviceId, serviceName,
+          preferredDate, preferredTime, status, createdAt,
+        ],
+      });
+      await transaction.execute({
+        sql: `INSERT INTO appointment_messages
+              (id, appointment_id, sender_uid, sender_role, sender_name, message, created_at)
+              VALUES (?, ?, 'clinic-system', 'admin', 'Masikap Health Center', ?, ?)`,
+        args: [randomUUID(), id, message, createdAt],
       });
       await transaction.commit();
     } catch (error) {
@@ -273,5 +434,5 @@ export default async function handler(request: ApiRequest, response: ApiResponse
     return response.status(500).json({ error: 'We could not save your request. Please try again.' });
   }
 
-  return response.status(201).json({ referenceCode, status: 'pending', createdAt });
+  return response.status(201).json({ referenceCode, status: 'confirmed', createdAt });
 }

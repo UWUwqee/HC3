@@ -8,7 +8,7 @@ export const Hero: React.FC = () => {
   const { language, setActiveSection, setBookingModalOpen, clinicOpen, clinicStatusError, appointmentRequestAvailability, siteContent } = useHealthCenter();
   const clinicAddress = language === 'fil' ? siteContent.settings.clinicAddressFil : siteContent.settings.clinicAddress;
   const clinicHours = language === 'fil' ? siteContent.settings.clinicHoursFil : siteContent.settings.clinicHours;
-  const bookingEnabled = clinicOpen === true && appointmentRequestAvailability === 'available';
+  const bookingEnabled = appointmentRequestAvailability === 'available';
 
   const handleScrollTo = (id: string) => {
     setActiveSection(id);

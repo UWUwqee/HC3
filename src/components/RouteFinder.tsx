@@ -21,6 +21,7 @@ type RouteResult = {
 };
 
 const destination: L.LatLngTuple = [14.5469469, 121.0715389];
+const destinationPosition: Position = { latitude: destination[0], longitude: destination[1], accuracy: 0, source: 'manual' };
 const routingProfiles: Record<TravelMode, string> = {
   walking: 'routed-foot',
   bicycling: 'routed-bike',
@@ -202,6 +203,22 @@ export const RouteFinder: React.FC = () => {
         if (result.code !== 'Ok' || !trip) throw new Error(result.message || 'No route was found for this travel mode.');
         const routePoints = trip.geometry.coordinates.map(([longitude, latitude]) => [latitude, longitude] as L.LatLngTuple);
         if (routePoints.length < 2) throw new Error('The routing service returned an invalid route.');
+        const routeStartDistance = distanceBetween(origin, {
+          latitude: routePoints[0][0],
+          longitude: routePoints[0][1],
+          accuracy: 0,
+          source: origin.source,
+        });
+        const lastRoutePoint = routePoints[routePoints.length - 1];
+        const routeEndDistance = distanceBetween(destinationPosition, {
+          latitude: lastRoutePoint[0],
+          longitude: lastRoutePoint[1],
+          accuracy: 0,
+          source: 'manual',
+        });
+        if (routeStartDistance > 250 || routeEndDistance > 150) {
+          throw new Error('The routing service returned a path that does not match your location and the health center. Please retry.');
+        }
         routeLineRef.current = L.polyline(routePoints, { color: '#1685a8', weight: 6, opacity: 0.95 }).addTo(map);
         map.fitBounds(routeLineRef.current.getBounds().extend(destination), { padding: [32, 32], maxZoom: 17 });
         const firstStep = trip.legs.flatMap((leg) => leg.steps).find((step) => step.distance > 0);
@@ -273,8 +290,8 @@ export const RouteFinder: React.FC = () => {
 
   return (
     <section aria-label={isFilipino ? 'Mapa ng direksyon' : 'Navigation map'} className="border-b border-[#dce7e1] bg-[#f7faf8] py-3 sm:py-4">
-      <div className="mx-auto flex max-w-7xl justify-end px-5 sm:px-8 lg:px-12">
-        <aside aria-label={isFilipino ? 'Live na mapa ng direksyon' : 'Live directions map'} className="route-enter w-full max-w-[360px] overflow-hidden rounded-sm border border-[#d7dfda] bg-[#fcfdfb] shadow-[0_10px_32px_rgba(23,58,55,0.12)]">
+      <div className="mx-auto w-full max-w-7xl px-5 sm:px-8 lg:px-12">
+        <aside aria-label={isFilipino ? 'Live na mapa ng direksyon' : 'Live directions map'} className="route-enter w-full overflow-hidden rounded-sm border border-[#d7dfda] bg-[#fcfdfb] shadow-[0_10px_32px_rgba(23,58,55,0.12)]">
           <header className="flex items-center justify-between gap-2 bg-[#173a37] px-3 py-2.5 text-white">
             <div className="min-w-0">
               <h2 className="truncate text-sm font-bold">{isFilipino ? 'Mag-navigate sa health center' : 'Navigate to health center'}</h2>
@@ -292,7 +309,7 @@ export const RouteFinder: React.FC = () => {
               {modes.map((mode) => <button key={mode.id} type="button" onClick={() => selectTravelMode(mode.id)} aria-pressed={travelMode === mode.id} className={`flex min-h-11 min-w-0 flex-col items-center justify-center gap-1 border-r border-[#dfe6e1] py-2 text-[11px] font-bold last:border-r-0 sm:flex-row ${travelMode === mode.id ? 'bg-[#dce9e2] text-[#173a37]' : 'text-slate-600 hover:bg-[#f4f7f4]'}`}>{mode.icon}<span>{isFilipino && mode.id === 'walking' ? 'Lakad' : isFilipino && mode.id === 'bicycling' ? 'Bisikleta' : isFilipino && mode.id === 'driving' ? 'Sasakyan' : mode.label}</span></button>)}
             </div>
             <div className="relative">
-              <div ref={mapElementRef} className="h-[170px] w-full bg-slate-100" aria-label={isFilipino ? 'Mapa na nagpapakita ng iyong lokasyon, health center, at ruta' : 'Map showing your location, the health center, and route'} />
+              <div ref={mapElementRef} className="h-[240px] w-full bg-slate-100 sm:h-[340px] lg:h-[400px]" aria-label={isFilipino ? 'Mapa na nagpapakita ng iyong lokasyon, health center, at ruta' : 'Map showing your location, the health center, and route'} />
               {pinStartMode && <div className="absolute left-2 right-2 top-2 z-[1000] flex items-center justify-between gap-2 rounded-md bg-white px-3 py-2 text-xs font-semibold text-slate-900 shadow-lg"><span>{isFilipino ? 'I-tap ang iyong lokasyon sa mapa' : 'Tap your start location on the map'}</span><button type="button" onClick={() => setPinStartMode(false)} className="text-teal-900 underline">{isFilipino ? 'Kanselahin' : 'Cancel'}</button></div>}
             </div>
             <div className="space-y-1.5 px-3 py-2.5">

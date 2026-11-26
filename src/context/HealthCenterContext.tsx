@@ -1,11 +1,11 @@
-import React, { createContext, useContext, useEffect, useState } from 'react';
+import React, { createContext, useCallback, useContext, useEffect, useState } from 'react';
 import type { Dispatch, ReactNode, SetStateAction } from 'react';
 import { useAuth } from '@clerk/react';
 import { DEFAULT_CLINIC_PUBLIC_SETTINGS, SERVICES_DATA } from '../data/healthCenterData';
 import type { ClinicPublicSettings, PublicSiteContent } from '../types';
 
 export type Language = 'en' | 'fil';
-export type AppointmentRequestAvailability = 'checking' | 'available' | 'pending' | 'error';
+export type AppointmentRequestAvailability = 'checking' | 'available' | 'pending' | 'confirmed' | 'error';
 
 export interface PatientAppointment {
   id: string;
@@ -106,6 +106,7 @@ interface AppointmentApiRow {
 interface HealthCenterContextValue {
   t: (typeof TRANSLATIONS)['en'];
   language: Language;
+  setLanguage: (language: Language) => void;
   toggleLanguage: () => void;
   activeSection: string;
   setActiveSection: (section: string) => void;
@@ -118,7 +119,7 @@ interface HealthCenterContextValue {
   setBookingModalOpen: (open: boolean) => void;
   selectedProgramForBooking: string;
   openBookingForProgram: (programId: string) => void;
-  markAppointmentRequestPending: () => void;
+  markAppointmentRequestStatus: (status: 'pending' | 'confirmed') => void;
   appointments: PatientAppointment[];
   cancelAppointment: (id: string) => Promise<void>;
   messagesOpen: boolean;
@@ -136,7 +137,8 @@ function normalizedStatus(value: unknown): PatientAppointment['status'] {
   if (status === 'confirmed') return 'Confirmed';
   if (status === 'rejected') return 'Rejected';
   if (status === 'cancelled' || status === 'canceled') return 'Cancelled';
-  return 'Pending';
+  if (status === 'completed') return 'Completed';
+  return status === 'pending' ? 'Pending' : 'Unknown';
 }
 
 function appointmentFromApi(row: AppointmentApiRow): PatientAppointment {
@@ -173,6 +175,10 @@ export const HealthCenterProvider: React.FC<{ children: ReactNode }> = ({ childr
   const [notificationToast, setNotificationToast] = useState('');
 
   const setActiveSection = (section: string) => setActiveSectionState(section);
+  const setLanguagePreference = (next: Language) => {
+    localStorage.setItem('masikap-language', next);
+    setLanguage(next);
+  };
   const toggleLanguage = () => setLanguage((current) => {
     const next = current === 'en' ? 'fil' : 'en';
     localStorage.setItem('masikap-language', next);
@@ -186,7 +192,9 @@ export const HealthCenterProvider: React.FC<{ children: ReactNode }> = ({ childr
     setSelectedProgramForBooking(programId);
     setBookingModalOpenState(true);
   };
-  const markAppointmentRequestPending = () => setAppointmentRequestAvailability('pending');
+  const markAppointmentRequestStatus = useCallback((status: 'pending' | 'confirmed') => {
+    setAppointmentRequestAvailability(status);
+  }, []);
 
   useEffect(() => {
     let active = true;
@@ -253,9 +261,13 @@ export const HealthCenterProvider: React.FC<{ children: ReactNode }> = ({ childr
         setAppointments(nextAppointments);
         setAppointmentRequestAvailability(nextAppointments.some((appointment) => appointment.status === 'Pending')
           ? 'pending'
-          : 'available');
+          : nextAppointments.some((appointment) => appointment.status === 'Confirmed')
+            ? 'confirmed'
+            : 'available');
       } catch {
-        if (active) setAppointmentRequestAvailability((current) => current === 'pending' ? current : 'error');
+        if (active) setAppointmentRequestAvailability((current) => (
+          current === 'pending' || current === 'confirmed' ? current : 'error'
+        ));
       }
     };
 
@@ -310,12 +322,14 @@ export const HealthCenterProvider: React.FC<{ children: ReactNode }> = ({ childr
     const result = await response.json() as { error?: string };
     if (!response.ok) throw new Error(result.error || 'Appointment could not be cancelled.');
     setAppointments((current) => current.map((item) => item.id === id ? { ...item, status: 'Cancelled' } : item));
+    setAppointmentRequestAvailability('available');
   };
 
   return (
     <HealthCenterContext.Provider value={{
       t: TRANSLATIONS[language],
       language,
+      setLanguage: setLanguagePreference,
       toggleLanguage,
       activeSection,
       setActiveSection,
@@ -328,7 +342,7 @@ export const HealthCenterProvider: React.FC<{ children: ReactNode }> = ({ childr
       setBookingModalOpen,
       selectedProgramForBooking,
       openBookingForProgram,
-      markAppointmentRequestPending,
+      markAppointmentRequestStatus,
       appointments,
       cancelAppointment,
       messagesOpen,

@@ -2,6 +2,7 @@ import React, { FormEvent, useEffect, useState } from 'react';
 import { useAuth, useUser } from '@clerk/react';
 import { MessageCircle, Send, X } from 'lucide-react';
 import { useHealthCenter } from '../context/HealthCenterContext';
+import { formatAppointmentTime } from '../appointmentSchedule';
 
 interface ChatAppointment {
   id: string;
@@ -148,7 +149,7 @@ export const UserAppointmentChat: React.FC = () => {
             <select aria-label={isFilipino ? 'Piliin ang appointment' : 'Select appointment'} value={selectedAppointmentId} onChange={(event) => setSelectedAppointmentId(event.target.value)} className="min-h-11 w-full border border-slate-300 bg-white px-3 text-sm text-slate-800">
               {appointments.map((appointment) => (
                 <option key={appointment.id} value={appointment.id}>
-                  {appointment.reference_code} · {appointment.service_name} · {appointment.preferred_date}
+                  {appointment.reference_code} · {appointment.service_name} · {appointment.preferred_date} {formatAppointmentTime(appointment.preferred_time)}
                 </option>
               ))}
             </select>

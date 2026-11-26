@@ -4,6 +4,7 @@ import { CalendarDays, Check, CheckCircle2, ChevronLeft, Clock3, LockKeyhole, Me
 import { AdminCalendar, SlotSetting, SlotSettingsForm } from './AdminCalendar';
 import { AdminContentManager } from './AdminContentManager';
 import { AdminReports } from './AdminReports';
+import { formatAppointmentTime, getAppointmentTimePeriod } from '../appointmentSchedule';
 
 interface AppointmentRow {
   id: string;
@@ -12,6 +13,11 @@ interface AppointmentRow {
   patient_name: string;
   phone: string;
   email: string;
+  address: string | null;
+  chief_complaint: string | null;
+  age: number | null;
+  priority_categories: string;
+  attendance_consent: number;
   zone: string;
   service_name: string;
   preferred_date: string;
@@ -19,6 +25,20 @@ interface AppointmentRow {
   status: string;
   chat_status: string;
   created_at: string;
+}
+
+const priorityCategoryLabels = {
+  pwd: 'Person with disability (PWD)',
+  senior_citizen: 'Senior citizen',
+  pregnant_lactating: 'Pregnant or lactating',
+};
+
+function getPriorityCategoryLabels(value: string) {
+  return value.split(',')
+    .filter((category): category is keyof typeof priorityCategoryLabels => (
+      Object.prototype.hasOwnProperty.call(priorityCategoryLabels, category)
+    ))
+    .map((category) => priorityCategoryLabels[category]);
 }
 
 interface ChatMessage {
@@ -40,6 +60,7 @@ export const AdminPanel: React.FC = () => {
   const [selectedId, setSelectedId] = useState<string>('');
   const [statusFilter, setStatusFilter] = useState('all');
   const [serviceFilter, setServiceFilter] = useState('all');
+  const [priorityOnly, setPriorityOnly] = useState(false);
   const [search, setSearch] = useState('');
   const [chatInput, setChatInput] = useState('');
   const [loading, setLoading] = useState(true);
@@ -98,15 +119,19 @@ export const AdminPanel: React.FC = () => {
       const matchesStatus = statusFilter === 'all'
         || (statusFilter === 'rejected' ? ['rejected', 'cancelled'].includes(appointment.status) : appointment.status === statusFilter);
       const matchesService = serviceFilter === 'all' || appointment.service_name === serviceFilter;
+      const matchesPriority = !priorityOnly || getPriorityCategoryLabels(appointment.priority_categories ?? '').length > 0;
       const matchesSearch = !query || [
         appointment.patient_name,
         appointment.reference_code,
         appointment.service_name,
         appointment.phone,
+        appointment.address ?? '',
+        appointment.chief_complaint ?? '',
+        getPriorityCategoryLabels(appointment.priority_categories ?? '').join(' '),
       ].some((value) => value.toLowerCase().includes(query));
-      return matchesStatus && matchesService && matchesSearch;
+      return matchesStatus && matchesService && matchesPriority && matchesSearch;
     });
-  }, [appointments, search, serviceFilter, statusFilter]);
+  }, [appointments, priorityOnly, search, serviceFilter, statusFilter]);
 
   useEffect(() => {
     if (selectedId && !filteredAppointments.some((appointment) => appointment.id === selectedId)) {
@@ -121,12 +146,14 @@ export const AdminPanel: React.FC = () => {
     if (action === 'approve') {
       const dateSettings = slotSettings.filter((setting) => setting.appointment_date === appointment.preferred_date);
       const fullDateBlocked = dateSettings.some((setting) => setting.time_slot === 'all_day' && Number(setting.blocked) === 1);
-      const slotSetting = dateSettings.find((setting) => setting.time_slot === appointment.preferred_time);
-      const slotBlocked = Number(slotSetting?.blocked) === 1;
+      const period = getAppointmentTimePeriod(appointment.preferred_time);
+      const exactSetting = dateSettings.find((setting) => setting.time_slot === appointment.preferred_time);
+      const periodSetting = dateSettings.find((setting) => setting.time_slot === period);
+      const slotBlocked = Number(exactSetting?.blocked) === 1 || Number(periodSetting?.blocked) === 1;
       const acceptedCount = appointments.filter((item) => item.status === 'confirmed'
         && item.preferred_date === appointment.preferred_date
-        && item.preferred_time === appointment.preferred_time).length;
-      const slotCapacity = Number(slotSetting?.capacity ?? 0);
+        && getAppointmentTimePeriod(item.preferred_time) === period).length;
+      const slotCapacity = Number(periodSetting?.capacity ?? exactSetting?.capacity ?? 0);
       if (fullDateBlocked || slotBlocked) {
         setError('This appointment date or time slot is blocked. Unblock it in Calendar & availability before accepting.');
         return;
@@ -304,6 +331,7 @@ export const AdminPanel: React.FC = () => {
                 ].map(([value, label]) => (
                   <button key={value} type="button" onClick={() => setStatusFilter(value)} className={`min-h-11 shrink-0 whitespace-nowrap px-3 text-xs font-bold ${statusFilter === value ? 'bg-[#173a37] text-white' : 'bg-[#f1f4f1] text-[#66736f] hover:bg-[#e7ede8]'}`}>{label}</button>
                 ))}
+                <button type="button" aria-pressed={priorityOnly} onClick={() => setPriorityOnly((current) => !current)} className={`min-h-11 shrink-0 whitespace-nowrap px-3 text-xs font-bold ${priorityOnly ? 'bg-[#173a37] text-white' : 'bg-[#f1f4f1] text-[#66736f] hover:bg-[#e7ede8]'}`}>Priority only</button>
               </div>
               <label className="mt-2 block text-[11px] font-semibold text-[#66736f]">Service
                 <select value={serviceFilter} onChange={(event) => setServiceFilter(event.target.value)} className="mt-1 block min-h-10 w-full border border-[#d9e1dc] bg-white px-3 text-xs text-[#17312e]">
@@ -316,7 +344,8 @@ export const AdminPanel: React.FC = () => {
               {loading ? <p className="p-5 text-sm text-[#66736f]">Loading requests...</p> : filteredAppointments.map((appointment) => (
                 <button key={appointment.id} type="button" onClick={() => setSelectedId(appointment.id)} className={`w-full border-b border-[#edf1ee] border-l-2 px-4 py-4 text-left transition-colors hover:bg-[#f5f8f5] ${selectedId === appointment.id ? 'border-l-[#17645c] bg-[#f0f5f1]' : 'border-l-transparent'}`}>
                   <div className="flex items-start justify-between gap-3"><div className="min-w-0"><div className="truncate text-sm font-bold">{appointment.patient_name}</div><div className="mt-1 truncate text-xs text-[#66736f]">{appointment.service_name}</div></div><span className={`shrink-0 px-2 py-1 text-[10px] font-bold uppercase ${appointment.status === 'confirmed' ? 'bg-emerald-100 text-emerald-800' : appointment.status === 'completed' ? 'bg-sky-100 text-sky-800' : appointment.status === 'cancelled' || appointment.status === 'rejected' ? 'bg-rose-100 text-rose-800' : 'bg-amber-100 text-amber-800'}`}>{appointment.status}</span></div>
-                  <div className="mt-3 flex min-w-0 flex-wrap items-center justify-between gap-x-2 gap-y-1 text-[11px] text-[#66736f]"><span>{appointment.preferred_date} · {appointment.preferred_time}</span><span className="break-all font-mono">{appointment.reference_code}</span></div>
+                  <div className="mt-3 flex min-w-0 flex-wrap items-center justify-between gap-x-2 gap-y-1 text-[11px] text-[#66736f]"><span>{appointment.preferred_date} · {formatAppointmentTime(appointment.preferred_time)}</span><span className="break-all font-mono">{appointment.reference_code}</span></div>
+                  {getPriorityCategoryLabels(appointment.priority_categories ?? '').length > 0 && <p className="mt-2 text-[10px] font-semibold text-[#17645c]">{getPriorityCategoryLabels(appointment.priority_categories ?? '').join(' · ')}</p>}
                 </button>
               ))}
               {!loading && filteredAppointments.length === 0 && <p className="p-5 text-sm text-[#66736f]">{appointments.length ? 'No requests match these filters.' : 'No appointment requests yet.'}</p>}
@@ -338,10 +367,14 @@ export const AdminPanel: React.FC = () => {
                   <h2 className="mt-5 break-words text-xl font-bold">{selected.patient_name}</h2>
                   <p className="mt-1 break-words text-sm text-[#66736f]">{selected.service_name}</p>
                   <dl className="mt-6 space-y-4 border-y border-[#edf1ee] py-5 text-sm">
-                    <div><dt className="text-[11px] font-bold uppercase tracking-wide text-[#87938c]">Preferred appointment</dt><dd className="mt-1 font-medium">{selected.preferred_date} · {selected.preferred_time}</dd></div>
+                    <div><dt className="text-[11px] font-bold uppercase tracking-wide text-[#87938c]">Preferred appointment</dt><dd className="mt-1 font-medium">{selected.preferred_date} · {formatAppointmentTime(selected.preferred_time)}</dd></div>
                     <div><dt className="text-[11px] font-bold uppercase tracking-wide text-[#87938c]">Barangay</dt><dd className="mt-1 font-medium">{selected.zone}</dd></div>
                     <div><dt className="text-[11px] font-bold uppercase tracking-wide text-[#87938c]">Contact number</dt><dd className="mt-1 font-medium">{selected.phone}</dd></div>
                     {selected.email && <div><dt className="text-[11px] font-bold uppercase tracking-wide text-[#87938c]">Email</dt><dd className="mt-1 break-all font-medium">{selected.email}</dd></div>}
+                    {selected.address && <div><dt className="text-[11px] font-bold uppercase tracking-wide text-[#87938c]">Home address</dt><dd className="mt-1 whitespace-pre-wrap break-words font-medium">{selected.address}</dd></div>}
+                    {selected.age !== null && <div><dt className="text-[11px] font-bold uppercase tracking-wide text-[#87938c]">Age</dt><dd className="mt-1 font-medium">{selected.age}</dd></div>}
+                    {getPriorityCategoryLabels(selected.priority_categories ?? '').length > 0 && <div><dt className="text-[11px] font-bold uppercase tracking-wide text-[#87938c]">Priority categories</dt><dd className="mt-1 font-medium">{getPriorityCategoryLabels(selected.priority_categories ?? '').join(', ')}</dd></div>}
+                    {selected.chief_complaint && <div><dt className="text-[11px] font-bold uppercase tracking-wide text-[#87938c]">Reason for visit</dt><dd className="mt-1 whitespace-pre-wrap break-words font-medium">{selected.chief_complaint}</dd></div>}
                   </dl>
                   <div className="mt-5 grid gap-2">
                     <button type="button" disabled={selected.status !== 'pending'} onClick={() => void performAction('approve', selected)} className="flex min-h-11 items-center justify-center gap-2 bg-[#17645c] px-2 text-sm font-bold text-white hover:bg-[#104f49] disabled:cursor-not-allowed disabled:opacity-50"><Check className="h-4 w-4 shrink-0" />Accept request</button>
