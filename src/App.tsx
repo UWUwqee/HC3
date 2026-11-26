@@ -1,5 +1,5 @@
-import React, { useEffect, useState } from 'react';
-import { useAuth } from '@clerk/react';
+import React, { useEffect, useRef, useState } from 'react';
+import { useAuth, useUser } from '@clerk/react';
 import { HealthCenterProvider, useHealthCenter } from './context/HealthCenterContext';
 import { Header } from './components/Header';
 import { Hero } from './components/Hero';
@@ -98,21 +98,27 @@ const AppContent: React.FC = () => {
 
 export default function App() {
   const { isLoaded, isSignedIn, getToken, signOut } = useAuth();
+  const { user } = useUser();
   const [accountRole, setAccountRole] = useState<'checking' | 'admin' | 'user' | 'error'>('checking');
   const [roleError, setRoleError] = useState('');
+  const verifiedUserId = useRef<string | null>(null);
+  const userId = user?.id ?? null;
+  const getTokenRef = useRef(getToken);
+  getTokenRef.current = getToken;
 
   useEffect(() => {
-    if (!isLoaded || !isSignedIn) {
+    if (!isLoaded || !isSignedIn || !userId) {
       setAccountRole('checking');
       setRoleError('');
+      verifiedUserId.current = null;
       return;
     }
 
     let active = true;
-    setAccountRole('checking');
+    if (verifiedUserId.current !== userId) setAccountRole('checking');
     void (async () => {
       try {
-        const token = await getToken();
+        const token = await getTokenRef.current();
         if (!token) throw new Error('A Clerk session token could not be created.');
         const response = await fetch('/api/admin?mode=role', {
           headers: { Authorization: `Bearer ${token}` },
@@ -129,6 +135,7 @@ export default function App() {
           throw new Error(data.error || 'Your account role could not be verified.');
         }
         if (!active) return;
+        verifiedUserId.current = userId;
         setAccountRole(data.role);
         setRoleError('');
         if (data.role === 'admin') {
@@ -148,7 +155,7 @@ export default function App() {
     return () => {
       active = false;
     };
-  }, [getToken, isLoaded, isSignedIn]);
+  }, [isLoaded, isSignedIn, userId]);
 
   if (!isLoaded) {
     return (

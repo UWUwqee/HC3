@@ -517,7 +517,7 @@ export default async function handler(request: ApiRequest, response: ApiResponse
       return response.status(200).json({ appointmentId, archived: true });
     }
 
-    if (action === 'approve' || action === 'reject' || action === 'cancel' || action === 'complete') {
+    if (action === 'approve' || action === 'cancel' || action === 'complete') {
       if (!admin) return response.status(403).json({ error: 'Admin permission is required.' });
       if (!appointmentId && !referenceCode) return response.status(400).json({ error: 'Appointment is required.' });
       const approvalTarget = action === 'approve'
@@ -530,9 +530,8 @@ export default async function handler(request: ApiRequest, response: ApiResponse
         ? getAppointmentTimePeriod(String(approvalTarget.rows[0].preferred_time))
         : '';
       const status = action === 'approve' ? 'confirmed'
-        : action === 'reject' ? 'rejected'
-          : action === 'complete' ? 'completed'
-            : 'cancelled';
+        : action === 'complete' ? 'completed'
+          : 'cancelled';
       const result = action === 'approve'
         ? await db.execute({
           sql: `UPDATE appointment_requests SET status = 'confirmed'

@@ -28,8 +28,8 @@ export const ContactSection: React.FC = () => {
           </h2>
           <p className="mt-3 text-base text-slate-600">
             {language === 'fil'
-              ? 'Maaaring magpadala ng online appointment request anumang oras, depende sa bakanteng petsa at oras.'
-              : 'Submit an appointment request online anytime, subject to available dates and time slots.'}
+              ? 'Magpadala ng online appointment request anumang oras. Awtomatikong kinukumpirma ang napiling schedule kapag available.'
+              : 'Submit an online appointment request anytime. Available dates and time slots are automatically confirmed.'}
           </p>
         </div>
 
@@ -38,7 +38,7 @@ export const ContactSection: React.FC = () => {
             <CalendarDays className="w-5 h-5 text-teal-800 shrink-0 mt-1" />
             <div>
               <h3 className="text-sm font-bold text-slate-900">Online appointment</h3>
-              <p className="mt-1 text-sm text-slate-600">{language === 'fil' ? 'Pumili ng serbisyo, petsa, at oras. Available ang online request anumang oras.' : 'Choose a service, date, and time. Online requests are available anytime.'}</p>
+              <p className="mt-1 text-sm text-slate-600">{language === 'fil' ? 'Pumili ng serbisyo, petsa, at bakanteng oras. Awtomatikong kumpirma ang appointment.' : 'Choose a service, date, and available time. The system confirms the appointment automatically.'}</p>
               <button disabled={!bookingEnabled} onClick={() => setBookingModalOpen(true)} className="mt-3 min-h-11 px-4 py-2.5 bg-teal-900 text-white text-sm font-bold rounded-md hover:bg-teal-950 disabled:cursor-not-allowed disabled:opacity-50">{bookingLabel}</button>
             </div>
           </div>

@@ -171,6 +171,10 @@
     color: #303a45 !important;
   }
 
+  html[data-accessibility-contrast="smart"] .accessibility-dark-details :where(p, li, span) {
+    color: #f0fdf4 !important;
+  }
+
   html[data-accessibility-contrast="smart"] .site-card,
   html[data-accessibility-contrast="smart"] .site-section-bg article {
     border-color: #64748b !important;
