@@ -1,25 +1,20 @@
 import React, { useCallback, useState } from 'react';
 import { useHealthCenter } from '../context/HealthCenterContext';
-import { Menu, X, CalendarDays, LogIn, LogOut, Mail, Accessibility } from 'lucide-react';
+import { Menu, X, LogIn, LogOut, Mail, Accessibility } from 'lucide-react';
 import { useAuth } from '@clerk/react';
-import masikapLogo from '../assets/images/MASIKAP.png';
 import { AccessibilityTools } from './AccessibilityTools';
 
 export const Header: React.FC = () => {
   const { signOut, isSignedIn } = useAuth();
   const {
-    t,
     language,
     activeSection,
     setActiveSection,
-    setBookingModalOpen,
-    appointmentRequestAvailability,
     setAuthModalOpen,
     setMessagesOpen,
     unreadAdminMessageCount,
     unreadMessagesError,
   } = useHealthCenter();
-  const bookingEnabled = appointmentRequestAvailability === 'available';
 
   const [mobileMenuOpen, setMobileMenuOpen] = useState(false);
   const [accessibilityOpen, setAccessibilityOpen] = useState(false);
@@ -42,15 +37,6 @@ export const Header: React.FC = () => {
     <header className="header-enter sticky top-0 z-40 border-b border-[#dce7e1] bg-white/95 backdrop-blur-md">
       <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
         <div className="flex h-[68px] items-center justify-between gap-2 sm:gap-5">
-          <a
-            href="#overview"
-            onClick={(e) => { e.preventDefault(); handleNavClick('overview'); }}
-            className="flex min-w-0 shrink items-center gap-2 text-xs font-bold text-[#0f4d3c] transition-colors duration-200 hover:text-[#2c7a5f] sm:gap-3 sm:text-[15px]"
-          >
-            <img src={masikapLogo} alt="" aria-hidden="true" className="h-10 w-10 shrink-0 rounded-full border border-[#dce7e1] object-cover" />
-            <span title={t.brand} className="min-w-0 truncate sm:overflow-visible sm:whitespace-nowrap">Masikap <span className="hidden sm:inline">Health Center</span></span>
-          </a>
-
           <nav className="hidden xl:flex items-center gap-7 text-sm font-medium text-[#6b7280]">
             {navLinks.map((item) => (
               <button
@@ -79,10 +65,6 @@ export const Header: React.FC = () => {
               <Accessibility className="h-5 w-5" aria-hidden="true" />
               <span>{language === 'fil' ? 'Aksesibilidad' : 'Accessibility'}</span>
             </button>
-            {bookingEnabled && <button onClick={() => setBookingModalOpen(true)} title="Request an appointment" className="px-4 py-2.5 text-sm font-bold text-white bg-[#0f4d3c] hover:bg-[#2c7a5f] rounded-sm transition-colors whitespace-nowrap flex items-center gap-2">
-              <CalendarDays className="w-4 h-4" />
-              <span>REQUEST AN APPOINTMENT</span>
-            </button>}
             {isSignedIn ? (
               <>
                 <button type="button" onClick={() => setMessagesOpen(true)} className="relative p-2 text-[#4b5563] hover:bg-[#eaf3ee] hover:text-[#0f4d3c]" aria-label={`Messages${unreadAdminMessageCount > 0 ? `, ${unreadAdminMessageCount} unread` : ''}`} title={unreadMessagesError || (unreadAdminMessageCount > 0 ? `${unreadAdminMessageCount} unread message${unreadAdminMessageCount === 1 ? '' : 's'}` : 'Messages')}>
@@ -151,10 +133,6 @@ export const Header: React.FC = () => {
           </div>
 
           <div className="pt-3 border-t border-[#e7eee9]">
-            {bookingEnabled && <button onClick={() => { setBookingModalOpen(true); setMobileMenuOpen(false); }} className="min-h-11 w-full py-2.5 px-4 text-sm font-semibold text-white bg-[#0f4d3c] hover:bg-[#2c7a5f] rounded-md flex items-center justify-center gap-2">
-              <CalendarDays className="w-4 h-4" />
-              <span>REQUEST AN APPOINTMENT</span>
-            </button>}
             {isSignedIn && <button type="button" onClick={() => void signOut()} className="mt-2 flex min-h-11 w-full items-center justify-center gap-2 rounded-md border border-[#dce7e1] px-4 text-sm font-semibold text-[#4b5563] hover:bg-[#f2f7f4]">
               <LogOut className="h-4 w-4" />
               Sign out
