@@ -1,6 +1,6 @@
 import React, { FormEvent, useEffect, useMemo, useState } from 'react';
 import { Ban, CalendarDays, ChevronLeft, ChevronRight, Clock3 } from 'lucide-react';
-import { formatAppointmentTime, getAppointmentTimeMinutes, getAppointmentTimePeriod } from '../appointmentSchedule';
+import { formatAppointmentTime, getAppointmentTimeMinutes } from '../appointmentSchedule';
 
 export interface CalendarAppointment {
   id: string;
@@ -15,18 +15,14 @@ export interface CalendarAppointment {
 export interface SlotSetting {
   appointment_date: string;
   time_slot: string;
-  capacity: number;
   blocked: number;
 }
 
 export interface SlotSettingsForm {
   dateBlocked: boolean;
   morningBlocked: boolean;
-  morningCapacity: number;
   afternoonBlocked: boolean;
-  afternoonCapacity: number;
   noPreferenceBlocked: boolean;
-  noPreferenceCapacity: number;
 }
 
 interface AdminCalendarProps {
@@ -76,32 +72,23 @@ export const AdminCalendar: React.FC<AdminCalendarProps> = ({
   const [form, setForm] = useState<SlotSettingsForm>({
     dateBlocked: false,
     morningBlocked: false,
-    morningCapacity: 0,
     afternoonBlocked: false,
-    afternoonCapacity: 0,
     noPreferenceBlocked: false,
-    noPreferenceCapacity: 0,
   });
   const dateBlockedSetting = Number(settingsByKey.get(`${selectedDate}:all_day`)?.blocked) === 1;
   const morningBlockedSetting = Number(settingsByKey.get(`${selectedDate}:morning`)?.blocked) === 1;
-  const morningCapacitySetting = Number(settingsByKey.get(`${selectedDate}:morning`)?.capacity ?? 0);
   const afternoonBlockedSetting = Number(settingsByKey.get(`${selectedDate}:afternoon`)?.blocked) === 1;
-  const afternoonCapacitySetting = Number(settingsByKey.get(`${selectedDate}:afternoon`)?.capacity ?? 0);
   const noPreferenceBlockedSetting = Number(settingsByKey.get(`${selectedDate}:no preference`)?.blocked) === 1;
-  const noPreferenceCapacitySetting = Number(settingsByKey.get(`${selectedDate}:no preference`)?.capacity ?? 0);
 
   useEffect(() => {
     setForm({
       dateBlocked: dateBlockedSetting,
       morningBlocked: morningBlockedSetting,
-      morningCapacity: morningCapacitySetting,
       afternoonBlocked: afternoonBlockedSetting,
-      afternoonCapacity: afternoonCapacitySetting,
       noPreferenceBlocked: noPreferenceBlockedSetting,
-      noPreferenceCapacity: noPreferenceCapacitySetting,
     });
     setError('');
-  }, [selectedDate, dateBlockedSetting, morningBlockedSetting, morningCapacitySetting, afternoonBlockedSetting, afternoonCapacitySetting, noPreferenceBlockedSetting, noPreferenceCapacitySetting]);
+  }, [selectedDate, dateBlockedSetting, morningBlockedSetting, afternoonBlockedSetting, noPreferenceBlockedSetting]);
 
   const appointmentsByDate = useMemo(() => appointments
     .filter((appointment) => appointment.status === 'confirmed' || appointment.status === 'pending')
@@ -174,9 +161,9 @@ export const AdminCalendar: React.FC<AdminCalendarProps> = ({
       ? `${formatDate(calendarDays[0], { month: 'short', day: 'numeric' })} – ${formatDate(calendarDays[6], { month: 'short', day: 'numeric', year: 'numeric' })}`
       : formatDate(selectedDate, { weekday: 'long', month: 'long', day: 'numeric', year: 'numeric' });
   const timeSlots = [
-    { id: 'morning', label: 'Morning', field: 'morning', blocked: form.morningBlocked, capacity: form.morningCapacity },
-    { id: 'afternoon', label: 'Afternoon', field: 'afternoon', blocked: form.afternoonBlocked, capacity: form.afternoonCapacity },
-    { id: 'no preference', label: 'No preference', field: 'noPreference', blocked: form.noPreferenceBlocked, capacity: form.noPreferenceCapacity },
+    { id: 'morning', label: 'Morning', field: 'morningBlocked' as const, blocked: form.morningBlocked },
+    { id: 'afternoon', label: 'Afternoon', field: 'afternoonBlocked' as const, blocked: form.afternoonBlocked },
+    { id: 'no preference', label: 'No preference', field: 'noPreferenceBlocked' as const, blocked: form.noPreferenceBlocked },
   ];
 
   return (
@@ -255,30 +242,19 @@ export const AdminCalendar: React.FC<AdminCalendarProps> = ({
         <form onSubmit={handleSave} className="space-y-4 rounded-md border border-[#dce7e1] bg-white p-4 shadow-sm">
           <div>
             <h2 className="text-sm font-bold">Manage availability</h2>
-            <p className="mt-1 text-xs text-[#66736f]">Capacity counts accepted appointments only. Set 0 for unlimited.</p>
+            <p className="mt-1 text-xs text-[#66736f]">Appointments are not limited by capacity. Block a date or time period when it is unavailable.</p>
           </div>
           <label className="flex items-center gap-3 border border-rose-100 bg-rose-50/50 p-3 text-xs font-semibold text-[#17312e]">
             <input type="checkbox" checked={form.dateBlocked} onChange={(event) => setForm((current) => ({ ...current, dateBlocked: event.target.checked }))} className="h-4 w-4 accent-rose-700" />
             Block all appointment requests for this date
           </label>
-          {timeSlots.map(({ id, label, field, blocked, capacity }) => {
-            const acceptedCount = (appointmentsByDate[selectedDate] ?? []).filter((appointment) => (
-              appointment.status === 'confirmed'
-              && (id === 'no preference'
-                ? appointment.preferred_time === id
-                : getAppointmentTimePeriod(appointment.preferred_time) === id)
-            )).length;
+          {timeSlots.map(({ id, label, field, blocked }) => {
             return (
               <div key={id} className="space-y-2 border-t border-[#edf1ee] pt-3">
                 <div className="flex items-center justify-between">
                   <label className="flex items-center gap-2 text-sm font-bold"><Clock3 className="h-4 w-4 text-[#17645c]" />{label}</label>
-                  <label className="flex items-center gap-2 text-xs text-[#66736f]"><input type="checkbox" checked={blocked} onChange={(event) => setForm((current) => ({ ...current, [`${field}Blocked`]: event.target.checked }))} className="h-4 w-4 accent-rose-700" />Blocked</label>
+                  <label className="flex items-center gap-2 text-xs text-[#66736f]"><input type="checkbox" checked={blocked} onChange={(event) => setForm((current) => ({ ...current, [field]: event.target.checked }))} className="h-4 w-4 accent-rose-700" />Blocked</label>
                 </div>
-                <label className="flex items-center justify-between gap-3 text-xs text-[#66736f]">
-                  <span>Maximum accepted <span className="block text-[10px]">Currently {acceptedCount} accepted</span></span>
-                  <input type="number" min={0} max={1000} value={capacity} onChange={(event) => setForm((current) => ({ ...current, [`${field}Capacity`]: Math.min(1000, Math.max(0, Number(event.target.value))) }))} className="min-h-11 w-24 border border-[#d9e1dc] px-2 py-1.5 text-right text-sm text-[#17312e]" />
-                </label>
-                {capacity > 0 && capacity < acceptedCount && <p role="status" className="text-[11px] text-amber-800">Current accepted bookings exceed this limit. No more requests can be accepted in this slot until capacity is increased or an appointment is cancelled.</p>}
               </div>
             );
           })}

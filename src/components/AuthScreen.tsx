@@ -1,5 +1,6 @@
-import React, { useState } from 'react';
+import React, { useEffect, useState } from 'react';
 import { SignIn, SignUp } from '@clerk/react';
+import { X } from 'lucide-react';
 import masikapLogo from '../assets/images/MASIKAP.png';
 
 const authAppearance = {
@@ -88,12 +89,29 @@ const authAppearance = {
   },
 };
 
-export const AuthScreen: React.FC = () => {
+export const AuthScreen: React.FC<{ onClose: () => void }> = ({ onClose }) => {
   const [isRegistering, setIsRegistering] = useState(false);
 
+  useEffect(() => {
+    const previousOverflow = document.body.style.overflow;
+    document.body.style.overflow = 'hidden';
+    const closeOnEscape = (event: KeyboardEvent) => {
+      if (event.key === 'Escape') onClose();
+    };
+    document.addEventListener('keydown', closeOnEscape);
+    return () => {
+      document.body.style.overflow = previousOverflow;
+      document.removeEventListener('keydown', closeOnEscape);
+    };
+  }, [onClose]);
+
   return (
-    <main className="flex min-h-dvh items-center justify-center bg-white px-3 py-4 text-[#18181b] sm:px-4 sm:py-12">
-      <section className="mx-auto w-full min-w-0 max-w-[360px] border border-[#e4e4e7] bg-white">
+    <div className="fixed inset-0 z-[70] overflow-y-auto bg-slate-950/60 px-3 py-4 text-[#18181b] sm:px-4 sm:py-8" onMouseDown={(event) => { if (event.target === event.currentTarget) onClose(); }}>
+      <div className="flex min-h-full items-center justify-center">
+      <section role="dialog" aria-modal="true" aria-label={isRegistering ? 'Create an account' : 'Log in'} className="relative mx-auto w-full min-w-0 max-w-[360px] border border-[#e4e4e7] bg-white">
+        <button type="button" onClick={onClose} aria-label="Close sign-in dialog" className="absolute right-2 top-2 z-10 flex h-10 w-10 items-center justify-center rounded-full text-slate-600 hover:bg-slate-100 hover:text-slate-900">
+          <X className="h-5 w-5" />
+        </button>
         <div className="border-b border-[#e4e4e7] px-5 py-3">
           <div className="flex items-center gap-3">
             <img src={masikapLogo} alt="Masikap Health Center" className="h-8 w-8 shrink-0 rounded-full border border-[#e4e4e7] object-cover" />
@@ -121,6 +139,7 @@ export const AuthScreen: React.FC = () => {
           </button>
         </div>
       </section>
-    </main>
+      </div>
+    </div>
   );
 };

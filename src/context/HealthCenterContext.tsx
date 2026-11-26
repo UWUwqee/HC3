@@ -114,6 +114,9 @@ interface HealthCenterContextValue {
   siteContentError: string;
   clinicOpen: boolean | null;
   clinicStatusError: string;
+  isSignedIn: boolean;
+  authModalOpen: boolean;
+  setAuthModalOpen: (open: boolean) => void;
   appointmentRequestAvailability: AppointmentRequestAvailability;
   bookingModalOpen: boolean;
   setBookingModalOpen: (open: boolean) => void;
@@ -165,11 +168,16 @@ export const HealthCenterProvider: React.FC<{ children: ReactNode }> = ({ childr
   const [siteContentError, setSiteContentError] = useState('');
   const [clinicOpen, setClinicOpen] = useState<boolean | null>(null);
   const [clinicStatusError, setClinicStatusError] = useState('');
-  const [appointmentRequestAvailability, setAppointmentRequestAvailability] = useState<AppointmentRequestAvailability>('checking');
+  const [appointmentRequestAvailability, setAppointmentRequestAvailability] = useState<AppointmentRequestAvailability>(
+    () => isSignedIn ? 'checking' : 'available',
+  );
   const [bookingModalOpenState, setBookingModalOpenState] = useState(false);
-  const [selectedProgramForBooking, setSelectedProgramForBooking] = useState('');
+  const [selectedProgramForBooking, setSelectedProgramForBooking] = useState(
+    () => sessionStorage.getItem('masikap_booking_program') ?? '',
+  );
+  const [authModalOpen, setAuthModalOpenState] = useState(false);
   const [appointments, setAppointments] = useState<PatientAppointment[]>([]);
-  const [messagesOpen, setMessagesOpen] = useState(false);
+  const [messagesOpenState, setMessagesOpenState] = useState(false);
   const [unreadAdminMessageCount, setUnreadAdminMessageCount] = useState(0);
   const [unreadMessagesError, setUnreadMessagesError] = useState('');
   const [notificationToast, setNotificationToast] = useState('');
@@ -179,18 +187,53 @@ export const HealthCenterProvider: React.FC<{ children: ReactNode }> = ({ childr
     localStorage.setItem('masikap-language', next);
     setLanguage(next);
   };
+  useEffect(() => {
+    document.documentElement.lang = language;
+  }, [language]);
   const toggleLanguage = () => setLanguage((current) => {
     const next = current === 'en' ? 'fil' : 'en';
     localStorage.setItem('masikap-language', next);
     return next;
   });
+  const setAuthModalOpen = (open: boolean) => {
+    if (!open) {
+      sessionStorage.removeItem('masikap_booking_after_signin');
+      sessionStorage.removeItem('masikap_booking_program');
+      setSelectedProgramForBooking('');
+    }
+    setAuthModalOpenState(open);
+  };
   const setBookingModalOpen = (open: boolean) => {
-    setBookingModalOpenState(open);
-    if (!open) setSelectedProgramForBooking('');
+    if (!open) {
+      setBookingModalOpenState(false);
+      setSelectedProgramForBooking('');
+      sessionStorage.removeItem('masikap_booking_after_signin');
+      sessionStorage.removeItem('masikap_booking_program');
+      return;
+    }
+    if (!isSignedIn) {
+      sessionStorage.setItem('masikap_booking_after_signin', 'true');
+      setAuthModalOpenState(true);
+      return;
+    }
+    if (appointmentRequestAvailability === 'available') setBookingModalOpenState(true);
+  };
+  const setMessagesOpen = (open: boolean) => {
+    if (open && !isSignedIn) {
+      setAuthModalOpenState(true);
+      return;
+    }
+    setMessagesOpenState(open);
   };
   const openBookingForProgram = (programId: string) => {
     setSelectedProgramForBooking(programId);
-    setBookingModalOpenState(true);
+    if (!isSignedIn) {
+      sessionStorage.setItem('masikap_booking_program', programId);
+      sessionStorage.setItem('masikap_booking_after_signin', 'true');
+      setAuthModalOpenState(true);
+      return;
+    }
+    if (appointmentRequestAvailability === 'available') setBookingModalOpenState(true);
   };
   const markAppointmentRequestStatus = useCallback((status: 'pending' | 'confirmed') => {
     setAppointmentRequestAvailability(status);
@@ -198,21 +241,6 @@ export const HealthCenterProvider: React.FC<{ children: ReactNode }> = ({ childr
 
   useEffect(() => {
     let active = true;
-    if (!isSignedIn) {
-      setAppointmentRequestAvailability('error');
-      setClinicStatusError('Sign in to load clinic status.');
-      return () => { active = false; };
-    }
-
-    const requestWithToken = async (path: string) => {
-      const token = await getToken();
-      if (!token) throw new Error('A Clerk session token could not be created.');
-      return fetch(path, {
-        headers: { Authorization: `Bearer ${token}` },
-        cache: 'no-store',
-      });
-    };
-
     const loadSiteContent = async () => {
       try {
         const response = await fetch('/api/content', { cache: 'no-store' });
@@ -229,13 +257,11 @@ export const HealthCenterProvider: React.FC<{ children: ReactNode }> = ({ childr
         setSiteContent((current) => JSON.stringify(current) === JSON.stringify(nextContent) ? current : nextContent);
       } catch {
         if (active) setSiteContentError('Clinic information could not be refreshed.');
-        return;
       }
     };
-
     const loadClinicStatus = async () => {
       try {
-        const response = await requestWithToken('/api/admin?mode=clinic_status');
+        const response = await fetch('/api/admin?mode=clinic_status', { cache: 'no-store' });
         const result = await response.json() as { clinicOpen?: boolean; error?: string };
         if (!response.ok || typeof result.clinicOpen !== 'boolean') {
           throw new Error(result.error || 'Clinic status could not be loaded.');
@@ -248,36 +274,85 @@ export const HealthCenterProvider: React.FC<{ children: ReactNode }> = ({ childr
         setClinicStatusError(caught instanceof Error ? caught.message : 'Clinic status could not be loaded.');
       }
     };
+    const refreshPublicContent = () => {
+      if (document.visibilityState === 'visible') {
+        void loadSiteContent();
+        void loadClinicStatus();
+      }
+    };
+    refreshPublicContent();
+    const timer = window.setInterval(refreshPublicContent, 60_000);
+    document.addEventListener('visibilitychange', refreshPublicContent);
+    return () => {
+      active = false;
+      window.clearInterval(timer);
+      document.removeEventListener('visibilitychange', refreshPublicContent);
+    };
+  }, []);
 
+  useEffect(() => {
+    let active = true;
+    if (!isSignedIn) {
+      setAppointmentRequestAvailability('available');
+      setAppointments([]);
+      setUnreadAdminMessageCount(0);
+      setUnreadMessagesError('');
+      return () => { active = false; };
+    }
+
+    const requestWithToken = async (path: string) => {
+      const token = await getToken();
+      if (!token) throw new Error('A Clerk session token could not be created.');
+      return fetch(path, {
+        headers: { Authorization: `Bearer ${token}` },
+        cache: 'no-store',
+      });
+    };
+    const loadClinicStatus = async () => {
+      try {
+        const response = await requestWithToken('/api/admin?mode=clinic_status');
+        const result = await response.json() as { clinicOpen?: boolean; error?: string };
+        if (!response.ok || typeof result.clinicOpen !== 'boolean') throw new Error(result.error || 'Clinic status could not be loaded.');
+        if (!active) return;
+        setClinicOpen(result.clinicOpen);
+        setClinicStatusError('');
+      } catch (caught) {
+        if (!active) return;
+        setClinicStatusError(caught instanceof Error ? caught.message : 'Clinic status could not be loaded.');
+      }
+    };
     const loadAppointments = async () => {
       try {
         const response = await requestWithToken('/api/appointments');
         const result = await response.json() as { appointments?: AppointmentApiRow[]; error?: string };
-        if (!response.ok || !Array.isArray(result.appointments)) {
-          throw new Error(result.error || 'Appointment requests could not be loaded.');
-        }
+        if (!response.ok || !Array.isArray(result.appointments)) throw new Error(result.error || 'Appointment requests could not be loaded.');
         if (!active) return;
         const nextAppointments = result.appointments.map(appointmentFromApi);
         setAppointments(nextAppointments);
-        setAppointmentRequestAvailability(nextAppointments.some((appointment) => appointment.status === 'Pending')
+        const availability = nextAppointments.some((appointment) => appointment.status === 'Pending')
           ? 'pending'
-          : nextAppointments.some((appointment) => appointment.status === 'Confirmed')
-            ? 'confirmed'
-            : 'available');
+          : nextAppointments.some((appointment) => appointment.status === 'Confirmed') ? 'confirmed' : 'available';
+        setAppointmentRequestAvailability(availability);
+        const resumeBooking = sessionStorage.getItem('masikap_booking_after_signin') === 'true';
+        if (resumeBooking && availability === 'available') {
+          sessionStorage.removeItem('masikap_booking_after_signin');
+          setBookingModalOpenState(true);
+        } else if (resumeBooking) {
+          sessionStorage.removeItem('masikap_booking_after_signin');
+          sessionStorage.removeItem('masikap_booking_program');
+          setSelectedProgramForBooking('');
+        }
       } catch {
         if (active) setAppointmentRequestAvailability((current) => (
           current === 'pending' || current === 'confirmed' ? current : 'error'
         ));
       }
     };
-
     const loadUnreadMessages = async () => {
       try {
         const response = await requestWithToken('/api/admin?mode=unread_messages');
         const result = await response.json() as { unreadCount?: number; error?: string };
-        if (!response.ok || typeof result.unreadCount !== 'number') {
-          throw new Error(result.error || 'Unread messages could not be loaded.');
-        }
+        if (!response.ok || typeof result.unreadCount !== 'number') throw new Error(result.error || 'Unread messages could not be loaded.');
         if (!active) return;
         setUnreadAdminMessageCount(result.unreadCount);
         setUnreadMessagesError('');
@@ -285,22 +360,21 @@ export const HealthCenterProvider: React.FC<{ children: ReactNode }> = ({ childr
         if (active) setUnreadMessagesError(caught instanceof Error ? caught.message : 'Unread messages could not be loaded.');
       }
     };
-
     let refreshInProgress = false;
-    const refreshWebsiteData = async () => {
+    const refreshPrivateData = async () => {
       if (refreshInProgress || document.visibilityState === 'hidden') return;
       refreshInProgress = true;
       try {
-        await Promise.all([loadSiteContent(), loadClinicStatus(), loadAppointments(), loadUnreadMessages()]);
+        await Promise.all([loadClinicStatus(), loadAppointments(), loadUnreadMessages()]);
       } finally {
         refreshInProgress = false;
       }
     };
     const refreshWhenVisible = () => {
-      if (document.visibilityState === 'visible') void refreshWebsiteData();
+      if (document.visibilityState === 'visible') void refreshPrivateData();
     };
-    void refreshWebsiteData();
-    const timer = window.setInterval(() => void refreshWebsiteData(), 3500);
+    void refreshPrivateData();
+    const timer = window.setInterval(() => void refreshPrivateData(), 15_000);
     document.addEventListener('visibilitychange', refreshWhenVisible);
     return () => {
       active = false;
@@ -337,6 +411,9 @@ export const HealthCenterProvider: React.FC<{ children: ReactNode }> = ({ childr
       siteContentError,
       clinicOpen,
       clinicStatusError,
+      isSignedIn: Boolean(isSignedIn),
+      authModalOpen,
+      setAuthModalOpen,
       appointmentRequestAvailability,
       bookingModalOpen: bookingModalOpenState,
       setBookingModalOpen,
@@ -345,7 +422,7 @@ export const HealthCenterProvider: React.FC<{ children: ReactNode }> = ({ childr
       markAppointmentRequestStatus,
       appointments,
       cancelAppointment,
-      messagesOpen,
+      messagesOpen: messagesOpenState,
       setMessagesOpen,
       unreadAdminMessageCount,
       unreadMessagesError,

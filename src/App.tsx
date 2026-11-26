@@ -17,7 +17,16 @@ import { PatientFlow } from './components/PatientFlow';
 import { AccessibilityProvider } from './context/AccessibilityContext';
 
 const AppContent: React.FC = () => {
-  const { activeSection, notificationToast, setNotificationToast, appointmentRequestAvailability, language } = useHealthCenter();
+  const {
+    activeSection,
+    notificationToast,
+    setNotificationToast,
+    appointmentRequestAvailability,
+    language,
+    isSignedIn,
+    authModalOpen,
+    setAuthModalOpen,
+  } = useHealthCenter();
 
   useEffect(() => {
     const handleStatusChange = (event: Event) => {
@@ -72,8 +81,9 @@ const AppContent: React.FC = () => {
 
       <Footer />
 
-      <UserAppointmentChat />
+      {isSignedIn && <UserAppointmentChat />}
       <OutreachBookingModal />
+      {authModalOpen && <AuthScreen onClose={() => setAuthModalOpen(false)} />}
 
       {notificationToast && (
         <div className="fixed bottom-[max(0.75rem,env(safe-area-inset-bottom))] left-3 right-3 z-50 flex max-w-sm items-center gap-2 rounded-md border border-white/10 bg-[#0f4d3c] px-4 py-3 text-sm font-semibold text-white shadow-lg animate-fade-in sm:bottom-5 sm:left-auto sm:right-5">
@@ -121,6 +131,10 @@ export default function App() {
         if (!active) return;
         setAccountRole(data.role);
         setRoleError('');
+        if (data.role === 'admin') {
+          sessionStorage.removeItem('masikap_booking_after_signin');
+          sessionStorage.removeItem('masikap_booking_program');
+        }
         if (data.role === 'user' && window.location.pathname === '/admin') {
           window.history.replaceState(null, '', '/');
         }
@@ -144,9 +158,7 @@ export default function App() {
     );
   }
 
-  if (!isSignedIn) return <AuthScreen />;
-
-  if (accountRole === 'checking') {
+  if (isSignedIn && accountRole === 'checking') {
     return (
       <main className="flex min-h-dvh items-center justify-center bg-[#eef2ee] text-sm font-bold text-[#173a37]">
         Checking account access...
@@ -154,7 +166,7 @@ export default function App() {
     );
   }
 
-  if (accountRole === 'error') {
+  if (isSignedIn && accountRole === 'error') {
     return (
       <main className="flex min-h-dvh flex-col items-center justify-center gap-4 bg-[#eef2ee] px-5 text-center text-[#173a37]">
         <p role="alert" className="max-w-md text-sm">{roleError}</p>
@@ -163,7 +175,7 @@ export default function App() {
     );
   }
 
-  if (accountRole === 'admin') return <AdminPanel />;
+  if (isSignedIn && accountRole === 'admin') return <AdminPanel />;
 
   return (
     <HealthCenterProvider>

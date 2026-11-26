@@ -4,7 +4,12 @@ import { randomUUID } from 'node:crypto';
 import type { IncomingMessage, ServerResponse } from 'node:http';
 import { clinicPublicSettingKeys, ensureSiteContent, getContentDatabase, readSiteContent, validateSiteContent } from './site-content-store.ts';
 import { verifyClerkToken } from './clerk-auth.ts';
-import { formatAppointmentTime, getAppointmentTimePeriod } from '../src/appointmentSchedule.ts';
+import {
+  formatAppointmentTime,
+  getAppointmentTimeMinutes,
+  getAppointmentTimePeriod,
+  getManilaAppointmentClock,
+} from '../src/appointmentSchedule.ts';
 
 type ApiRequest = IncomingMessage & { body?: unknown; headers: IncomingMessage['headers'] & { authorization?: string } };
 type ApiResponse = ServerResponse & {
@@ -104,6 +109,12 @@ async function initializeAdminDatabase(db: ReturnType<typeof createClient>) {
       read_at TEXT NOT NULL,
       PRIMARY KEY (appointment_id, user_uid)
     )`,
+    `CREATE TABLE IF NOT EXISTS appointment_reminders (
+      appointment_id TEXT NOT NULL,
+      reminder_type TEXT NOT NULL,
+      sent_at TEXT NOT NULL,
+      PRIMARY KEY (appointment_id, reminder_type)
+    )`,
   ], 'write');
   await db.execute({
     sql: `INSERT OR IGNORE INTO clinic_settings (setting_key, setting_value, updated_at)
@@ -155,8 +166,71 @@ function isAdmin(decoded: NonNullable<Awaited<ReturnType<typeof verifyClerkToken
     && allowedEmails.includes(decoded.email.toLowerCase());
 }
 
+async function createDueAppointmentReminders(db: ReturnType<typeof createClient>, userUid: string) {
+  const now = new Date();
+  const clock = getManilaAppointmentClock(now);
+  const appointments = await db.execute({
+    sql: `SELECT id, service_name, preferred_date, preferred_time
+          FROM appointment_requests
+          WHERE owner_uid = ? AND status = 'confirmed'
+            AND preferred_date = ? AND chat_status != 'deleted'`,
+    args: [userUid, clock.date],
+  });
+
+  for (const appointment of appointments.rows) {
+    const appointmentTime = String(appointment.preferred_time);
+    const appointmentMinutes = getAppointmentTimeMinutes(appointmentTime);
+    if (appointmentMinutes === null
+      || clock.minutes < appointmentMinutes - 60
+      || clock.minutes >= appointmentMinutes) continue;
+
+    const appointmentId = String(appointment.id);
+    const sentAt = now.toISOString();
+    const transaction = await db.transaction('write');
+    try {
+      const claim = await transaction.execute({
+        sql: `INSERT OR IGNORE INTO appointment_reminders (appointment_id, reminder_type, sent_at)
+              VALUES (?, 'one_hour_before', ?)`,
+        args: [appointmentId, sentAt],
+      });
+      if (claim.rowsAffected > 0) {
+        const time = formatAppointmentTime(appointmentTime);
+        const message = `This is an automated reminder.\n\nYour appointment for ${String(appointment.service_name)} is scheduled for ${String(appointment.preferred_date)} at ${time}. Please arrive on time.\n\nFilipino:\nAwtomatikong paalala ito. Nakatakda ang iyong appointment para sa ${String(appointment.service_name)} sa ${String(appointment.preferred_date)}, ganap na ${time}. Mangyaring dumating sa oras.`;
+        await transaction.execute({
+          sql: `INSERT INTO appointment_messages
+                (id, appointment_id, sender_uid, sender_role, sender_name, message, created_at)
+                VALUES (?, ?, 'clinic-system', 'admin', 'Masikap Health Center', ?, ?)`,
+          args: [randomUUID(), appointmentId, message, sentAt],
+        });
+      }
+      await transaction.commit();
+    } catch (error) {
+      await transaction.rollback();
+      throw error;
+    }
+  }
+}
+
 export default async function handler(request: ApiRequest, response: ApiResponse) {
   response.setHeader('Cache-Control', 'no-store');
+
+  const mode = new URL(request.url ?? '/', 'http://localhost').searchParams.get('mode');
+  if (request.method === 'GET' && mode === 'clinic_status') {
+    const publicStatusDb = getDatabase();
+    if (!publicStatusDb) return response.status(503).json({ error: 'Clinic status is temporarily unavailable.' });
+    try {
+      await ensureClinicSettings(publicStatusDb);
+      const result = await publicStatusDb.execute("SELECT setting_value, updated_at FROM clinic_settings WHERE setting_key = 'clinic_open'");
+      const setting = result.rows[0];
+      return response.status(200).json({
+        clinicOpen: setting?.setting_value === '1',
+        updatedAt: setting?.updated_at ?? null,
+      });
+    } catch (error) {
+      console.error('Public clinic status could not be loaded:', error);
+      return response.status(500).json({ error: 'Clinic status could not be loaded.' });
+    }
+  }
 
   let decoded;
   try {
@@ -176,21 +250,6 @@ export default async function handler(request: ApiRequest, response: ApiResponse
   const db = getDatabase();
   if (!db) return response.status(503).json({ error: 'Turso database is not configured.' });
 
-  const mode = new URL(request.url ?? '/', 'http://localhost').searchParams.get('mode');
-  if (request.method === 'GET' && mode === 'clinic_status') {
-    try {
-      await ensureClinicSettings(db);
-      const result = await db.execute("SELECT setting_value, updated_at FROM clinic_settings WHERE setting_key = 'clinic_open'");
-      const setting = result.rows[0];
-      return response.status(200).json({
-        clinicOpen: setting?.setting_value === '1',
-        updatedAt: setting?.updated_at ?? null,
-      });
-    } catch {
-      return response.status(500).json({ error: 'Clinic status could not be loaded.' });
-    }
-  }
-
   await initializeAdminDatabase(db);
   const admin = isAdmin(decoded);
 
@@ -207,6 +266,7 @@ export default async function handler(request: ApiRequest, response: ApiResponse
   if (request.method === 'GET' && mode === 'unread_messages') {
     if (admin) return response.status(200).json({ unreadCount: 0 });
     try {
+      await createDueAppointmentReminders(db, decoded.uid);
       const result = await db.execute({
         sql: `SELECT COUNT(*) AS unread_count
               FROM appointment_messages AS message
@@ -220,7 +280,8 @@ export default async function handler(request: ApiRequest, response: ApiResponse
         args: [decoded.uid, decoded.uid],
       });
       return response.status(200).json({ unreadCount: Number(result.rows[0]?.unread_count ?? 0) });
-    } catch {
+    } catch (error) {
+      console.error('Unread appointment messages could not be loaded:', error);
       return response.status(500).json({ error: 'Unread messages could not be loaded.' });
     }
   }
@@ -234,7 +295,7 @@ export default async function handler(request: ApiRequest, response: ApiResponse
       if (admin) {
         const appointments = await db.execute(`SELECT * FROM appointment_requests ORDER BY created_at DESC, id DESC`);
         const messages = await db.execute(`SELECT * FROM appointment_messages ORDER BY created_at ASC`);
-        const slotSettings = await db.execute(`SELECT appointment_date, time_slot, capacity, blocked FROM appointment_slot_settings ORDER BY appointment_date ASC, time_slot ASC`);
+        const slotSettings = await db.execute(`SELECT appointment_date, time_slot, blocked FROM appointment_slot_settings ORDER BY appointment_date ASC, time_slot ASC`);
         return response.status(200).json({
           role: 'admin',
           appointments: appointments.rows.map((row) => ({ ...row })),
@@ -474,38 +535,28 @@ export default async function handler(request: ApiRequest, response: ApiResponse
       if (typeof body.dateBlocked !== 'boolean'
         || typeof body.morningBlocked !== 'boolean'
         || typeof body.afternoonBlocked !== 'boolean'
-        || typeof body.noPreferenceBlocked !== 'boolean'
-        || !Number.isInteger(body.morningCapacity)
-        || !Number.isInteger(body.afternoonCapacity)
-        || !Number.isInteger(body.noPreferenceCapacity)
-        || Number(body.morningCapacity) < 0
-        || Number(body.afternoonCapacity) < 0
-        || Number(body.noPreferenceCapacity) < 0
-        || Number(body.morningCapacity) > 1000
-        || Number(body.afternoonCapacity) > 1000
-        || Number(body.noPreferenceCapacity) > 1000) {
-        return response.status(400).json({ error: 'Enter valid blocking options and capacities from 0 to 1,000.' });
+        || typeof body.noPreferenceBlocked !== 'boolean') {
+        return response.status(400).json({ error: 'Enter valid blocking options.' });
       }
       const updatedAt = new Date().toISOString();
       const settings = [
-        { timeSlot: 'all_day', capacity: 0, blocked: body.dateBlocked },
-        { timeSlot: 'morning', capacity: Number(body.morningCapacity), blocked: body.morningBlocked },
-        { timeSlot: 'afternoon', capacity: Number(body.afternoonCapacity), blocked: body.afternoonBlocked },
-        { timeSlot: 'no preference', capacity: Number(body.noPreferenceCapacity), blocked: body.noPreferenceBlocked },
+        { timeSlot: 'all_day', blocked: body.dateBlocked },
+        { timeSlot: 'morning', blocked: body.morningBlocked },
+        { timeSlot: 'afternoon', blocked: body.afternoonBlocked },
+        { timeSlot: 'no preference', blocked: body.noPreferenceBlocked },
       ];
-      await db.batch(settings.map(({ timeSlot, capacity, blocked }) => ({
+      await db.batch(settings.map(({ timeSlot, blocked }) => ({
         sql: `INSERT INTO appointment_slot_settings (appointment_date, time_slot, capacity, blocked, updated_at)
-              VALUES (?, ?, ?, ?, ?)
+              VALUES (?, ?, 0, ?, ?)
               ON CONFLICT(appointment_date, time_slot) DO UPDATE SET
-                capacity = excluded.capacity, blocked = excluded.blocked, updated_at = excluded.updated_at`,
-        args: [appointmentDate, timeSlot, capacity, blocked ? 1 : 0, updatedAt],
+                capacity = 0, blocked = excluded.blocked, updated_at = excluded.updated_at`,
+        args: [appointmentDate, timeSlot, blocked ? 1 : 0, updatedAt],
       })), 'write');
       return response.status(200).json({
         date: appointmentDate,
-        slotSettings: settings.map(({ timeSlot, capacity, blocked }) => ({
+        slotSettings: settings.map(({ timeSlot, blocked }) => ({
           appointment_date: appointmentDate,
           time_slot: timeSlot,
-          capacity,
           blocked: blocked ? 1 : 0,
         })),
       });
@@ -584,30 +635,8 @@ export default async function handler(request: ApiRequest, response: ApiResponse
                   WHERE appointment_date = appointment_requests.preferred_date
                     AND time_slot IN ('all_day', appointment_requests.preferred_time, ?)
                     AND blocked = 1
-                )
-                AND (
-                  COALESCE((
-                    SELECT capacity FROM appointment_slot_settings
-                    WHERE appointment_date = appointment_requests.preferred_date
-                      AND time_slot = ?
-                  ), 0) = 0
-                  OR (
-                    SELECT COUNT(*) FROM appointment_requests AS accepted
-                    WHERE accepted.status = 'confirmed'
-                      AND accepted.preferred_date = appointment_requests.preferred_date
-                      AND CASE
-                        WHEN accepted.preferred_time = 'morning' THEN 'morning'
-                        WHEN accepted.preferred_time IN ('afternoon', 'no preference') THEN 'afternoon'
-                        WHEN substr(accepted.preferred_time, 1, 2) < '12' THEN 'morning'
-                        ELSE 'afternoon'
-                      END = ?
-                  ) < (
-                    SELECT capacity FROM appointment_slot_settings
-                    WHERE appointment_date = appointment_requests.preferred_date
-                      AND time_slot = ?
-                  )
                 )`,
-          args: [appointmentId || referenceCode, approvalPeriod, approvalPeriod, approvalPeriod, approvalPeriod],
+          args: [appointmentId || referenceCode, approvalPeriod],
         })
         : action === 'complete'
           ? appointmentId
@@ -618,7 +647,7 @@ export default async function handler(request: ApiRequest, response: ApiResponse
           : await db.execute({ sql: 'UPDATE appointment_requests SET status = ? WHERE reference_code = ?', args: [status, referenceCode] });
       if (result.rowsAffected === 0 && action === 'approve') {
         const setting = await db.execute({
-          sql: `SELECT time_slot, capacity, blocked FROM appointment_slot_settings WHERE appointment_date = ?`,
+          sql: `SELECT time_slot, blocked FROM appointment_slot_settings WHERE appointment_date = ?`,
           args: [String(approvalTarget?.rows[0].preferred_date)],
         });
         const allSettings = setting.rows;
@@ -627,17 +656,6 @@ export default async function handler(request: ApiRequest, response: ApiResponse
         const periodSetting = allSettings.find((item) => item.time_slot === approvalPeriod);
         if (fullDayBlocked || Number(exactSetting?.blocked) === 1 || Number(periodSetting?.blocked) === 1) {
           return response.status(409).json({ error: 'This appointment date or time slot is blocked. Unblock it before accepting the request.' });
-        }
-        const confirmedForDate = await db.execute({
-          sql: "SELECT preferred_time FROM appointment_requests WHERE status = 'confirmed' AND preferred_date = ?",
-          args: [String(approvalTarget?.rows[0].preferred_date)],
-        });
-        const acceptedCount = confirmedForDate.rows.filter((item) => (
-          getAppointmentTimePeriod(String(item.preferred_time)) === approvalPeriod
-        )).length;
-        const periodCapacity = Number(periodSetting?.capacity ?? 0);
-        if (periodCapacity > 0 && acceptedCount >= periodCapacity) {
-          return response.status(409).json({ error: 'This time slot has reached its appointment limit. Increase the capacity or choose another request.' });
         }
         const current = appointmentId
           ? await db.execute({ sql: 'SELECT status FROM appointment_requests WHERE id = ?', args: [appointmentId] })

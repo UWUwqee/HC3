@@ -4,7 +4,7 @@ import { CalendarDays, Check, CheckCircle2, ChevronLeft, Clock3, LockKeyhole, Me
 import { AdminCalendar, SlotSetting, SlotSettingsForm } from './AdminCalendar';
 import { AdminContentManager } from './AdminContentManager';
 import { AdminReports } from './AdminReports';
-import { formatAppointmentTime, getAppointmentTimePeriod } from '../appointmentSchedule';
+import { formatAppointmentTime, getAppointmentTimeMinutes, getAppointmentTimePeriod } from '../appointmentSchedule';
 
 interface AppointmentRow {
   id: string;
@@ -25,6 +25,7 @@ interface AppointmentRow {
   status: string;
   chat_status: string;
   created_at: string;
+  completed_at: string | null;
 }
 
 const priorityCategoryLabels = {
@@ -39,6 +40,29 @@ function getPriorityCategoryLabels(value: string) {
       Object.prototype.hasOwnProperty.call(priorityCategoryLabels, category)
     ))
     .map((category) => priorityCategoryLabels[category]);
+}
+
+function csvCell(value: string) {
+  const safeValue = /^[\s]*[=+\-@]/.test(value) ? `'${value}` : value;
+  return `"${safeValue.replaceAll('"', '""')}"`;
+}
+
+function exportCompletedAppointments(appointments: AppointmentRow[]) {
+  const columns: Array<keyof AppointmentRow> = [
+    'reference_code', 'patient_name', 'phone', 'email', 'address', 'chief_complaint', 'age', 'priority_categories',
+    'zone', 'service_name', 'preferred_date', 'preferred_time', 'status', 'created_at', 'completed_at',
+  ];
+  const rows = [
+    columns.map((column) => csvCell(column.replaceAll('_', ' '))).join(','),
+    ...appointments.map((appointment) => columns.map((column) => csvCell(String(appointment[column] ?? ''))).join(',')),
+  ];
+  const blob = new Blob([`\uFEFF${rows.join('\r\n')}`], { type: 'text/csv;charset=utf-8' });
+  const url = URL.createObjectURL(blob);
+  const link = document.createElement('a');
+  link.href = url;
+  link.download = `masikap-completed-appointments-${new Date().toISOString().slice(0, 10)}.csv`;
+  link.click();
+  URL.revokeObjectURL(url);
 }
 
 interface ChatMessage {
@@ -56,9 +80,10 @@ export const AdminPanel: React.FC = () => {
   const [appointments, setAppointments] = useState<AppointmentRow[]>([]);
   const [messages, setMessages] = useState<ChatMessage[]>([]);
   const [slotSettings, setSlotSettings] = useState<SlotSetting[]>([]);
-  const [activeTab, setActiveTab] = useState<'requests' | 'calendar' | 'content' | 'reports'>('requests');
+  const [activeTab, setActiveTab] = useState<'requests' | 'completed' | 'calendar' | 'content' | 'reports'>('requests');
   const [selectedId, setSelectedId] = useState<string>('');
   const [statusFilter, setStatusFilter] = useState('all');
+  const [appointmentDateFilter, setAppointmentDateFilter] = useState('');
   const [serviceFilter, setServiceFilter] = useState('all');
   const [priorityOnly, setPriorityOnly] = useState(false);
   const [search, setSearch] = useState('');
@@ -111,13 +136,17 @@ export const AdminPanel: React.FC = () => {
   const counts = useMemo(() => ({
     pending: appointments.filter((appointment) => appointment.status === 'pending').length,
     confirmed: appointments.filter((appointment) => appointment.status === 'confirmed').length,
+    completed: appointments.filter((appointment) => appointment.status === 'completed').length,
     rejected: appointments.filter((appointment) => appointment.status === 'rejected' || appointment.status === 'cancelled').length,
   }), [appointments]);
   const filteredAppointments = useMemo(() => {
     const query = search.trim().toLowerCase();
     return appointments.filter((appointment) => {
-      const matchesStatus = statusFilter === 'all'
-        || (statusFilter === 'rejected' ? ['rejected', 'cancelled'].includes(appointment.status) : appointment.status === statusFilter);
+      const matchesStatus = activeTab === 'completed'
+        ? appointment.status === 'completed'
+        : statusFilter === 'all'
+          || (statusFilter === 'rejected' ? ['rejected', 'cancelled'].includes(appointment.status) : appointment.status === statusFilter);
+      const matchesDate = !appointmentDateFilter || appointment.preferred_date === appointmentDateFilter;
       const matchesService = serviceFilter === 'all' || appointment.service_name === serviceFilter;
       const matchesPriority = !priorityOnly || getPriorityCategoryLabels(appointment.priority_categories ?? '').length > 0;
       const matchesSearch = !query || [
@@ -128,10 +157,13 @@ export const AdminPanel: React.FC = () => {
         appointment.address ?? '',
         appointment.chief_complaint ?? '',
         getPriorityCategoryLabels(appointment.priority_categories ?? '').join(' '),
-      ].some((value) => value.toLowerCase().includes(query));
-      return matchesStatus && matchesService && matchesPriority && matchesSearch;
-    });
-  }, [appointments, priorityOnly, search, serviceFilter, statusFilter]);
+      ].some((value) => String(value ?? '').toLowerCase().includes(query));
+      return matchesStatus && matchesDate && matchesService && matchesPriority && matchesSearch;
+    }).sort((left, right) => left.preferred_date.localeCompare(right.preferred_date)
+      || (getAppointmentTimeMinutes(left.preferred_time) ?? Number.POSITIVE_INFINITY)
+        - (getAppointmentTimeMinutes(right.preferred_time) ?? Number.POSITIVE_INFINITY)
+      || left.created_at.localeCompare(right.created_at));
+  }, [activeTab, appointmentDateFilter, appointments, priorityOnly, search, serviceFilter, statusFilter]);
 
   useEffect(() => {
     if (selectedId && !filteredAppointments.some((appointment) => appointment.id === selectedId)) {
@@ -150,16 +182,8 @@ export const AdminPanel: React.FC = () => {
       const exactSetting = dateSettings.find((setting) => setting.time_slot === appointment.preferred_time);
       const periodSetting = dateSettings.find((setting) => setting.time_slot === period);
       const slotBlocked = Number(exactSetting?.blocked) === 1 || Number(periodSetting?.blocked) === 1;
-      const acceptedCount = appointments.filter((item) => item.status === 'confirmed'
-        && item.preferred_date === appointment.preferred_date
-        && getAppointmentTimePeriod(item.preferred_time) === period).length;
-      const slotCapacity = Number(periodSetting?.capacity ?? exactSetting?.capacity ?? 0);
       if (fullDateBlocked || slotBlocked) {
         setError('This appointment date or time slot is blocked. Unblock it in Calendar & availability before accepting.');
-        return;
-      }
-      if (slotCapacity > 0 && acceptedCount >= slotCapacity) {
-        setError('This time slot has reached its appointment limit. Increase the capacity in Calendar & availability before accepting.');
         return;
       }
     }
@@ -276,10 +300,11 @@ export const AdminPanel: React.FC = () => {
           </div>
         </div>
 
-        <section aria-label="Appointment summary" className="mb-6 grid grid-cols-2 gap-3 sm:grid-cols-3">
+        <section aria-label="Appointment summary" className="mb-6 grid grid-cols-2 gap-3 sm:grid-cols-4">
           {[
             { label: 'Awaiting review', value: counts.pending, icon: Clock3, color: 'text-amber-800', bg: 'bg-amber-50', border: 'border-l-amber-400' },
             { label: 'Accepted', value: counts.confirmed, icon: Check, color: 'text-emerald-800', bg: 'bg-emerald-50', border: 'border-l-emerald-500' },
+            { label: 'Completed', value: counts.completed, icon: CheckCircle2, color: 'text-sky-800', bg: 'bg-sky-50', border: 'border-l-sky-500' },
             { label: 'Rejected or cancelled', value: counts.rejected, icon: X, color: 'text-rose-800', bg: 'bg-rose-50', border: 'border-l-rose-500' },
           ].map(({ label, value, icon: Icon, color, bg, border }) => (
             <div key={label} className={`flex min-w-0 items-center gap-2 border border-[#dce7e1] border-l-4 bg-white p-3 shadow-sm sm:gap-4 sm:p-4 ${border}`}>
@@ -292,11 +317,12 @@ export const AdminPanel: React.FC = () => {
         <nav aria-label="Admin sections" className="mb-5 flex gap-1 overflow-x-auto rounded-md border border-[#dce7e1] bg-white p-1 shadow-sm">
           {[
             { id: 'requests', label: 'Appointment requests' },
+            { id: 'completed', label: 'Completed records' },
             { id: 'calendar', label: 'Calendar & availability' },
             { id: 'content', label: 'Website content' },
-            { id: 'reports', label: 'Reports & export' },
+            { id: 'reports', label: 'Reports' },
           ].map(({ id, label }) => (
-            <button key={id} type="button" onClick={() => setActiveTab(id as 'requests' | 'calendar' | 'content' | 'reports')} className={`min-h-11 shrink-0 rounded-sm px-3 py-2.5 text-xs font-bold sm:px-4 sm:text-sm ${activeTab === id ? 'bg-[#0f4d3c] text-white' : 'text-[#66736f] hover:bg-[#f2f7f4] hover:text-[#0f4d3c]'}`}>{label}</button>
+            <button key={id} type="button" onClick={() => { setActiveTab(id as typeof activeTab); setSelectedId(''); }} className={`min-h-11 shrink-0 rounded-sm px-3 py-2.5 text-xs font-bold sm:px-4 sm:text-sm ${activeTab === id ? 'bg-[#0f4d3c] text-white' : 'text-[#66736f] hover:bg-[#f2f7f4] hover:text-[#0f4d3c]'}`}>{label}</button>
           ))}
         </nav>
 
@@ -306,7 +332,15 @@ export const AdminPanel: React.FC = () => {
             appointments={appointments}
             slotSettings={slotSettings}
             onSaveSettings={saveSlotSettings}
-            onSelectAppointment={(id) => { setSelectedId(id); setActiveTab('requests'); }}
+            onSelectAppointment={(id) => {
+              setStatusFilter('all');
+              setAppointmentDateFilter('');
+              setServiceFilter('all');
+              setPriorityOnly(false);
+              setSearch('');
+              setSelectedId(id);
+              setActiveTab('requests');
+            }}
           />
         ) : activeTab === 'content' ? (
           <AdminContentManager />
@@ -316,29 +350,34 @@ export const AdminPanel: React.FC = () => {
         <section className="grid min-w-0 overflow-hidden rounded-md border border-[#dce7e1] bg-white shadow-sm lg:min-h-[640px] lg:grid-cols-[350px_minmax(0,1fr)]">
           <aside className={`${selected ? 'hidden lg:block' : ''} min-w-0 border-b border-[#dce7e1] lg:border-b-0 lg:border-r`}>
             <div className="border-b border-[#edf1ee] p-4">
-              <div className="mb-3 flex items-center justify-between"><h2 className="text-sm font-bold">Appointment requests</h2><span className="text-xs text-[#66736f]">{filteredAppointments.length} shown</span></div>
+              <div className="mb-3 flex items-center justify-between gap-2"><h2 className="text-sm font-bold">{activeTab === 'completed' ? 'Completed records' : 'Appointment requests'}</h2><span className="text-xs text-[#66736f]">{filteredAppointments.length} shown</span></div>
+              {activeTab === 'completed' && <p className="mb-3 text-xs leading-relaxed text-[#66736f]">Completed appointments are kept here for follow-up and record keeping.</p>}
               <label className="flex h-10 items-center gap-2 border border-[#d9e1dc] px-3 text-[#66736f] focus-within:border-[#17645c]">
                 <Search className="h-4 w-4 shrink-0" />
                 <input value={search} onChange={(event) => setSearch(event.target.value)} placeholder="Search patient or reference" className="min-w-0 flex-1 text-xs text-[#17312e] outline-none" />
               </label>
-              <div className="mt-3 flex gap-1 overflow-x-auto pb-1">
+              {activeTab === 'requests' && <div className="mt-3 flex gap-1 overflow-x-auto pb-1">
                 {[
                   ['all', 'All'],
                   ['pending', 'Pending'],
                   ['confirmed', 'Accepted'],
-                  ['completed', 'Completed'],
                   ['rejected', 'Rejected'],
                 ].map(([value, label]) => (
                   <button key={value} type="button" onClick={() => setStatusFilter(value)} className={`min-h-11 shrink-0 whitespace-nowrap px-3 text-xs font-bold ${statusFilter === value ? 'bg-[#173a37] text-white' : 'bg-[#f1f4f1] text-[#66736f] hover:bg-[#e7ede8]'}`}>{label}</button>
                 ))}
                 <button type="button" aria-pressed={priorityOnly} onClick={() => setPriorityOnly((current) => !current)} className={`min-h-11 shrink-0 whitespace-nowrap px-3 text-xs font-bold ${priorityOnly ? 'bg-[#173a37] text-white' : 'bg-[#f1f4f1] text-[#66736f] hover:bg-[#e7ede8]'}`}>Priority only</button>
-              </div>
+              </div>}
+              <label className="mt-2 block text-[11px] font-semibold text-[#66736f]">Appointment date
+                <input type="date" value={appointmentDateFilter} onChange={(event) => setAppointmentDateFilter(event.target.value)} className="mt-1 block min-h-10 w-full border border-[#d9e1dc] bg-white px-3 text-xs text-[#17312e]" />
+              </label>
+              {appointmentDateFilter && <button type="button" onClick={() => setAppointmentDateFilter('')} className="mt-1 min-h-9 text-xs font-semibold text-[#17645c] underline">Clear date filter</button>}
               <label className="mt-2 block text-[11px] font-semibold text-[#66736f]">Service
                 <select value={serviceFilter} onChange={(event) => setServiceFilter(event.target.value)} className="mt-1 block min-h-10 w-full border border-[#d9e1dc] bg-white px-3 text-xs text-[#17312e]">
                   <option value="all">All services</option>
                   {services.map((service) => <option key={service} value={service}>{service}</option>)}
                 </select>
               </label>
+              {activeTab === 'completed' && <button type="button" disabled={filteredAppointments.length === 0} onClick={() => exportCompletedAppointments(filteredAppointments)} className="mt-3 min-h-11 w-full bg-[#17645c] px-3 text-xs font-bold text-white hover:bg-[#104f49] disabled:cursor-not-allowed disabled:opacity-50">Export filtered records (CSV)</button>}
             </div>
             <div className="max-h-[420px] overflow-y-auto lg:max-h-[calc(100vh-360px)]">
               {loading ? <p className="p-5 text-sm text-[#66736f]">Loading requests...</p> : filteredAppointments.map((appointment) => (
@@ -374,7 +413,7 @@ export const AdminPanel: React.FC = () => {
                     {selected.address && <div><dt className="text-[11px] font-bold uppercase tracking-wide text-[#87938c]">Home address</dt><dd className="mt-1 whitespace-pre-wrap break-words font-medium">{selected.address}</dd></div>}
                     {selected.age !== null && <div><dt className="text-[11px] font-bold uppercase tracking-wide text-[#87938c]">Age</dt><dd className="mt-1 font-medium">{selected.age}</dd></div>}
                     {getPriorityCategoryLabels(selected.priority_categories ?? '').length > 0 && <div><dt className="text-[11px] font-bold uppercase tracking-wide text-[#87938c]">Priority categories</dt><dd className="mt-1 font-medium">{getPriorityCategoryLabels(selected.priority_categories ?? '').join(', ')}</dd></div>}
-                    {selected.chief_complaint && <div><dt className="text-[11px] font-bold uppercase tracking-wide text-[#87938c]">Reason for visit</dt><dd className="mt-1 whitespace-pre-wrap break-words font-medium">{selected.chief_complaint}</dd></div>}
+                    {selected.chief_complaint && <div><dt className="text-[11px] font-bold uppercase tracking-wide text-[#87938c]">Health concern</dt><dd className="mt-1 whitespace-pre-wrap break-words font-medium">{selected.chief_complaint}</dd></div>}
                   </dl>
                   <div className="mt-5 grid gap-2">
                     <button type="button" disabled={selected.status !== 'pending'} onClick={() => void performAction('approve', selected)} className="flex min-h-11 items-center justify-center gap-2 bg-[#17645c] px-2 text-sm font-bold text-white hover:bg-[#104f49] disabled:cursor-not-allowed disabled:opacity-50"><Check className="h-4 w-4 shrink-0" />Accept request</button>

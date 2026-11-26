@@ -60,7 +60,6 @@ export const OutreachBookingModal: React.FC = () => {
   const [serviceId, setServiceId] = useState('checkup');
   const [patientName, setPatientName] = useState('');
   const [phone, setPhone] = useState('');
-  const [email, setEmail] = useState('');
   const [age, setAge] = useState('');
   const [address, setAddress] = useState('');
   const [chiefComplaint, setChiefComplaint] = useState('');
@@ -141,12 +140,20 @@ export const OutreachBookingModal: React.FC = () => {
   }, [services, serviceId]);
 
   useEffect(() => {
+    const isMaternityService = services.find((service) => service.id === serviceId)?.category === 'maternity';
+    if (isMaternityService) {
+      setPriorityCategories((current) => current.includes('pregnant_lactating')
+        ? current
+        : [...current, 'pregnant_lactating']);
+    }
+  }, [serviceId, services]);
+
+  useEffect(() => {
     if (!bookingModalOpen) {
       setReceipt(null);
       setError('');
       setPatientName('');
       setPhone('');
-      setEmail('');
       setAge('');
       setAddress('');
       setChiefComplaint('');
@@ -257,7 +264,6 @@ export const OutreachBookingModal: React.FC = () => {
         body: JSON.stringify({
           patientName,
           phone,
-          email,
           age: Number(age),
           address,
           chiefComplaint,
@@ -418,10 +424,6 @@ export const OutreachBookingModal: React.FC = () => {
                   <input id="appointment-phone" required type="tel" inputMode="tel" autoComplete="tel" minLength={7} maxLength={32} value={phone} onChange={(event) => setPhone(event.target.value)} placeholder="09XX XXX XXXX" className="min-h-12 w-full rounded-md border border-slate-300 px-3.5 py-2.5 text-base focus:outline-none focus:ring-2 focus:ring-teal-700" />
                 </div>
                 <div>
-                  <label htmlFor="appointment-email" className="mb-1 block text-sm font-semibold text-slate-800">{t.formEmail}</label>
-                  <input id="appointment-email" type="email" autoComplete="email" maxLength={254} value={email} onChange={(event) => setEmail(event.target.value)} className="min-h-12 w-full rounded-md border border-slate-300 px-3.5 py-2.5 text-base focus:outline-none focus:ring-2 focus:ring-teal-700" />
-                </div>
-                <div>
                   <label htmlFor="appointment-zone" className="mb-1 block text-sm font-semibold text-slate-800">{t.formZone} *</label>
                   <select id="appointment-zone" required value={zone} onChange={(event) => setZone(event.target.value)} className="min-h-12 w-full rounded-md border border-slate-300 bg-white px-3.5 py-2.5 text-base focus:outline-none focus:ring-2 focus:ring-teal-700">
                     {COVERAGE_AREAS.map((area) => <option key={area} value={area}>{area}</option>)}
@@ -465,7 +467,7 @@ export const OutreachBookingModal: React.FC = () => {
                   </div>
                 </fieldset>
                 <div className="sm:col-span-2">
-                  <label htmlFor="appointment-chief-complaint" className="mb-1 block text-sm font-semibold text-slate-800">{isFilipino ? 'Dahilan ng pagbisita' : 'Reason for visit'} *</label>
+                  <label htmlFor="appointment-chief-complaint" className="mb-1 block text-sm font-semibold text-slate-800">{isFilipino ? 'Alalahaning pangkalusugan' : 'Health concern'} *</label>
                   <textarea id="appointment-chief-complaint" required minLength={2} maxLength={2000} rows={4} value={chiefComplaint} onChange={(event) => setChiefComplaint(event.target.value)} placeholder={isFilipino ? 'Ilarawan nang maikli ang iyong alalahanin o serbisyong kailangan.' : 'Briefly describe your concern or the service you need.'} className="w-full resize-y rounded-md border border-slate-300 px-3.5 py-3 text-base focus:outline-none focus:ring-2 focus:ring-teal-700" />
                 </div>
                 <label className="flex items-start gap-3 border border-amber-300 bg-amber-50 p-3 text-sm leading-relaxed text-amber-950 sm:col-span-2">

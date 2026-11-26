@@ -189,7 +189,7 @@ export default async function handler(request: ApiRequest, response: ApiResponse
         services: regularServicesBySlot.get(`${slot.date}:${slot.time}`) ?? [],
       }));
       const settingResult = await db.execute({
-        sql: `SELECT appointment_date, time_slot, capacity, blocked
+        sql: `SELECT appointment_date, time_slot, blocked
               FROM appointment_slot_settings
               WHERE appointment_date >= ?
               ORDER BY appointment_date ASC, time_slot ASC`,
@@ -198,7 +198,6 @@ export default async function handler(request: ApiRequest, response: ApiResponse
       const slotSettings = settingResult.rows.map((row) => ({
         date: String(row.appointment_date),
         time: String(row.time_slot),
-        capacity: Number(row.capacity),
         blocked: Number(row.blocked) === 1,
       }));
       const unavailableResult = await db.execute({
@@ -380,29 +379,13 @@ export default async function handler(request: ApiRequest, response: ApiResponse
       }
       const period = getAppointmentTimePeriod(preferredTime);
       const slotSettings = await transaction.execute({
-        sql: `SELECT time_slot, capacity, blocked FROM appointment_slot_settings
+        sql: `SELECT time_slot, blocked FROM appointment_slot_settings
               WHERE appointment_date = ? AND time_slot IN ('all_day', ?, ?)`,
         args: [preferredDate, preferredTime, period],
       });
       if (slotSettings.rows.some((setting) => Number(setting.blocked) === 1)) {
         await transaction.commit();
         return response.status(409).json({ error: 'The selected date or time slot is unavailable. Please choose another.' });
-      }
-      const periodSetting = slotSettings.rows.find((setting) => String(setting.time_slot) === period);
-      const capacity = Number(periodSetting?.capacity ?? 0);
-      if (capacity > 0) {
-        const confirmedAppointments = await transaction.execute({
-          sql: `SELECT preferred_time FROM appointment_requests
-                WHERE preferred_date = ? AND status = 'confirmed'`,
-          args: [preferredDate],
-        });
-        const acceptedCount = confirmedAppointments.rows.filter((appointment) => (
-          getAppointmentTimePeriod(String(appointment.preferred_time)) === period
-        )).length;
-        if (acceptedCount >= capacity) {
-          await transaction.commit();
-          return response.status(409).json({ error: 'This appointment period has reached its limit. Please choose another time.' });
-        }
       }
       const status = 'confirmed';
       const appointmentTime = formatAppointmentTime(preferredTime);

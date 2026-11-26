@@ -14,11 +14,6 @@ interface ReportAppointment {
   created_at: string;
 }
 
-function csvCell(value: string) {
-  const safeValue = /^[\s]*[=+\-@]/.test(value) ? `'${value}` : value;
-  return `"${safeValue.replaceAll('"', '""')}"`;
-}
-
 export const AdminReports: React.FC<{ appointments: ReportAppointment[] }> = ({ appointments }) => {
   const [fromDate, setFromDate] = useState('');
   const [toDate, setToDate] = useState('');
@@ -33,24 +28,6 @@ export const AdminReports: React.FC<{ appointments: ReportAppointment[] }> = ({ 
     && (service === 'all' || item.service_name === service)
   )), [appointments, fromDate, toDate, status, service]);
 
-  const exportCsv = () => {
-    const columns: Array<keyof ReportAppointment> = [
-      'reference_code', 'patient_name', 'phone', 'email', 'zone',
-      'service_name', 'preferred_date', 'preferred_time', 'status', 'created_at',
-    ];
-    const rows = [
-      columns.map((column) => csvCell(column.replaceAll('_', ' '))).join(','),
-      ...filtered.map((appointment) => columns.map((column) => csvCell(String(appointment[column] ?? ''))).join(',')),
-    ];
-    const blob = new Blob([`\uFEFF${rows.join('\r\n')}`], { type: 'text/csv;charset=utf-8' });
-    const url = URL.createObjectURL(blob);
-    const link = document.createElement('a');
-    link.href = url;
-    link.download = `health-center-appointments-${new Date().toISOString().slice(0, 10)}.csv`;
-    link.click();
-    URL.revokeObjectURL(url);
-  };
-
   const pendingCount = filtered.filter((item) => item.status === 'pending').length;
   const acceptedCount = filtered.filter((item) => item.status === 'confirmed').length;
   const completedCount = filtered.filter((item) => item.status === 'completed').length;
@@ -58,10 +35,7 @@ export const AdminReports: React.FC<{ appointments: ReportAppointment[] }> = ({ 
   return (
     <section className="space-y-4">
       <div className="rounded-md border border-[#dce7e1] bg-white p-4 shadow-sm sm:p-5">
-        <div className="flex flex-wrap items-start justify-between gap-3">
-          <div><h2 className="text-base font-bold">Appointment reports</h2><p className="mt-1 text-xs text-[#66736f]">Filter appointment records and export the results. Contact details are included in the admin-only download.</p></div>
-          <button type="button" onClick={exportCsv} disabled={filtered.length === 0} className="min-h-11 rounded-sm bg-[#0f4d3c] px-4 text-xs font-bold text-white hover:bg-[#2c7a5f] disabled:cursor-not-allowed disabled:opacity-50">Download CSV ({filtered.length})</button>
-        </div>
+        <div><h2 className="text-base font-bold">Appointment reports</h2><p className="mt-1 text-xs text-[#66736f]">Filter appointment records by date, status, or service. Export completed patient records from the Completed records section.</p></div>
         <div className="mt-4 grid gap-3 sm:grid-cols-2 xl:grid-cols-4">
           <label className="text-xs font-semibold text-[#66736f]">Appointment from<input type="date" value={fromDate} max={toDate || undefined} onChange={(event) => setFromDate(event.target.value)} className="mt-1 block min-h-11 w-full border border-[#d9e1dc] px-3 text-sm text-[#17312e]" /></label>
           <label className="text-xs font-semibold text-[#66736f]">Appointment to<input type="date" value={toDate} min={fromDate || undefined} onChange={(event) => setToDate(event.target.value)} className="mt-1 block min-h-11 w-full border border-[#d9e1dc] px-3 text-sm text-[#17312e]" /></label>
