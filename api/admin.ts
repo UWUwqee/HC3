@@ -502,39 +502,6 @@ export default async function handler(request: ApiRequest, response: ApiResponse
       });
     }
 
-    if (action === 'delete_appointment') {
-      if (!admin) return response.status(403).json({ error: 'Admin permission is required.' });
-      if (!appointmentId) return response.status(400).json({ error: 'Appointment is required.' });
-      const transaction = await db.transaction('write');
-      try {
-        const appointment = await transaction.execute({
-          sql: 'SELECT id FROM appointment_requests WHERE id = ?',
-          args: [appointmentId],
-        });
-        if (appointment.rows.length === 0) {
-          await transaction.rollback();
-          return response.status(404).json({ error: 'Appointment not found.' });
-        }
-        await transaction.execute({
-          sql: 'DELETE FROM appointment_messages WHERE appointment_id = ?',
-          args: [appointmentId],
-        });
-        await transaction.execute({
-          sql: 'DELETE FROM appointment_chat_reads WHERE appointment_id = ?',
-          args: [appointmentId],
-        });
-        await transaction.execute({
-          sql: 'DELETE FROM appointment_requests WHERE id = ?',
-          args: [appointmentId],
-        });
-        await transaction.commit();
-      } catch (error) {
-        await transaction.rollback();
-        throw error;
-      }
-      return response.status(200).json({ appointmentId, deleted: true });
-    }
-
     if (action === 'delete_chat') {
       if (!admin) return response.status(403).json({ error: 'Admin permission is required.' });
       if (!appointmentId) return response.status(400).json({ error: 'Appointment is required.' });

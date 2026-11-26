@@ -3,7 +3,6 @@ import { useAuth } from '@clerk/react';
 import { CalendarDays, Check, CheckCircle2, ChevronLeft, Clock3, LockKeyhole, MessageCircle, Search, Send, Trash2, X } from 'lucide-react';
 import { AdminCalendar, SlotSetting, SlotSettingsForm } from './AdminCalendar';
 import { AdminContentManager } from './AdminContentManager';
-import { AdminReports } from './AdminReports';
 import { formatAppointmentTime, getAppointmentTimeMinutes, getAppointmentTimePeriod } from '../appointmentSchedule';
 
 interface AppointmentRow {
@@ -80,11 +79,10 @@ export const AdminPanel: React.FC = () => {
   const [appointments, setAppointments] = useState<AppointmentRow[]>([]);
   const [messages, setMessages] = useState<ChatMessage[]>([]);
   const [slotSettings, setSlotSettings] = useState<SlotSetting[]>([]);
-  const [activeTab, setActiveTab] = useState<'requests' | 'priority' | 'completed' | 'calendar' | 'content' | 'reports'>('requests');
+  const [activeTab, setActiveTab] = useState<'requests' | 'priority' | 'completed' | 'calendar' | 'content'>('requests');
   const [selectedId, setSelectedId] = useState<string>('');
   const [statusFilter, setStatusFilter] = useState('all');
   const [appointmentDateFilter, setAppointmentDateFilter] = useState('');
-  const [serviceFilter, setServiceFilter] = useState('all');
   const [priorityOnly, setPriorityOnly] = useState(false);
   const [search, setSearch] = useState('');
   const [chatInput, setChatInput] = useState('');
@@ -99,7 +97,7 @@ export const AdminPanel: React.FC = () => {
       if (!response.ok) throw new Error(response.status === 403 ? 'This account is not an admin.' : 'Admin workspace could not be loaded.');
       const data = await response.json() as { role: string; appointments: AppointmentRow[]; messages: ChatMessage[]; slotSettings?: SlotSetting[] };
       if (data.role !== 'admin') throw new Error('This account is not an admin.');
-      setAppointments(data.appointments.slice().sort((first, second) =>
+      setAppointments(data.appointments.filter((appointment) => appointment.status !== 'rejected').sort((first, second) =>
         second.created_at.localeCompare(first.created_at) || second.id.localeCompare(first.id)));
       setMessages(data.messages);
       setSlotSettings(data.slotSettings ?? []);
@@ -117,7 +115,6 @@ export const AdminPanel: React.FC = () => {
     return () => window.clearInterval(timer);
   }, []);
 
-  const services = useMemo(() => [...new Set(appointments.map((appointment) => appointment.service_name).filter(Boolean))].sort(), [appointments]);
   const selected = useMemo(() => appointments.find((appointment) => appointment.id === selectedId), [appointments, selectedId]);
   const selectedMessages = useMemo(() => messages.filter((message) => message.appointment_id === selectedId), [messages, selectedId]);
   const counts = useMemo(() => ({
@@ -126,7 +123,6 @@ export const AdminPanel: React.FC = () => {
     completed: appointments.filter((appointment) => appointment.status === 'completed').length,
     priority: appointments.filter((appointment) => appointment.status !== 'completed'
       && getPriorityCategoryLabels(appointment.priority_categories ?? '').length > 0).length,
-    rejected: appointments.filter((appointment) => appointment.status === 'rejected' || appointment.status === 'cancelled').length,
   }), [appointments]);
   const filteredAppointments = useMemo(() => {
     const query = search.trim().toLowerCase();
@@ -136,9 +132,8 @@ export const AdminPanel: React.FC = () => {
         : activeTab === 'priority'
           ? appointment.status !== 'completed' && getPriorityCategoryLabels(appointment.priority_categories ?? '').length > 0
           : statusFilter === 'all'
-            || (statusFilter === 'rejected' ? ['rejected', 'cancelled'].includes(appointment.status) : appointment.status === statusFilter);
+            || (statusFilter === 'history' ? appointment.status === 'cancelled' : appointment.status === statusFilter);
       const matchesDate = !appointmentDateFilter || appointment.preferred_date === appointmentDateFilter;
-      const matchesService = serviceFilter === 'all' || appointment.service_name === serviceFilter;
       const matchesPriority = !priorityOnly || getPriorityCategoryLabels(appointment.priority_categories ?? '').length > 0;
       const matchesSearch = !query || [
         appointment.patient_name,
@@ -150,12 +145,12 @@ export const AdminPanel: React.FC = () => {
         String(appointment.age ?? ''),
         getPriorityCategoryLabels(appointment.priority_categories ?? '').join(' '),
       ].some((value) => String(value ?? '').toLowerCase().includes(query));
-      return matchesStatus && matchesDate && matchesService && matchesPriority && matchesSearch;
+      return matchesStatus && matchesDate && matchesPriority && matchesSearch;
     }).sort((left, right) => left.preferred_date.localeCompare(right.preferred_date)
       || (getAppointmentTimeMinutes(left.preferred_time) ?? Number.POSITIVE_INFINITY)
         - (getAppointmentTimeMinutes(right.preferred_time) ?? Number.POSITIVE_INFINITY)
       || left.created_at.localeCompare(right.created_at));
-  }, [activeTab, appointmentDateFilter, appointments, priorityOnly, search, serviceFilter, statusFilter]);
+  }, [activeTab, appointmentDateFilter, appointments, priorityOnly, search, statusFilter]);
 
   useEffect(() => {
     if (selectedId && !filteredAppointments.some((appointment) => appointment.id === selectedId)) {
@@ -165,7 +160,6 @@ export const AdminPanel: React.FC = () => {
 
   const performAction = async (action: string, appointment: AppointmentRow) => {
     if (action === 'delete_chat' && !window.confirm('Archive this conversation for the patient? Messages will remain available in admin records, and the appointment request will be kept.')) return;
-    if (action === 'delete_appointment' && !window.confirm(`Permanently delete the appointment request for ${appointment.patient_name} (${appointment.reference_code}) and its messages? This cannot be undone.`)) return;
     if (action === 'complete' && !window.confirm('Mark this appointment as completed? The patient chat will close, and the request will move to Completed records.')) return;
     if (action === 'approve') {
       const dateSettings = slotSettings.filter((setting) => setting.appointment_date === appointment.preferred_date);
@@ -194,12 +188,6 @@ export const AdminPanel: React.FC = () => {
       if (action === 'delete_chat') {
         setAppointments((current) => current.map((item) => item.id === appointment.id ? { ...item, chat_status: 'deleted' } : item));
         setMessages((current) => current.filter((message) => message.appointment_id !== appointment.id));
-        setChatInput('');
-      }
-      if (action === 'delete_appointment') {
-        setAppointments((current) => current.filter((item) => item.id !== appointment.id));
-        setMessages((current) => current.filter((message) => message.appointment_id !== appointment.id));
-        setSelectedId('');
         setChatInput('');
       }
       await loadWorkspace();
@@ -262,12 +250,11 @@ export const AdminPanel: React.FC = () => {
           <div><p className="text-sm font-medium text-[#52635b]">Review appointment requests, contact patients, and manage confirmations.</p><p className="mt-1 text-xs text-[#7b8982]">Online appointment requests are available 24/7.</p></div>
         </div>
 
-        <section aria-label="Appointment summary" className="mb-6 grid grid-cols-2 gap-3 sm:grid-cols-4">
+        <section aria-label="Appointment summary" className="mb-6 grid grid-cols-2 gap-3 sm:grid-cols-3">
           {[
             { label: 'Awaiting review', value: counts.pending, icon: Clock3, color: 'text-amber-800', bg: 'bg-amber-50', border: 'border-l-amber-400' },
             { label: 'Accepted', value: counts.confirmed, icon: Check, color: 'text-emerald-800', bg: 'bg-emerald-50', border: 'border-l-emerald-500' },
             { label: 'Completed', value: counts.completed, icon: CheckCircle2, color: 'text-sky-800', bg: 'bg-sky-50', border: 'border-l-sky-500' },
-            { label: 'Rejected or cancelled', value: counts.rejected, icon: X, color: 'text-rose-800', bg: 'bg-rose-50', border: 'border-l-rose-500' },
           ].map(({ label, value, icon: Icon, color, bg, border }) => (
             <div key={label} className={`flex min-w-0 items-center gap-2 border border-[#dce7e1] border-l-4 bg-white p-3 shadow-sm sm:gap-4 sm:p-4 ${border}`}>
               <div className={`flex h-9 w-9 shrink-0 items-center justify-center ${bg} ${color} sm:h-10 sm:w-10`}><Icon className="h-5 w-5" /></div>
@@ -283,7 +270,6 @@ export const AdminPanel: React.FC = () => {
             { id: 'completed', label: `Completed records (${counts.completed})` },
             { id: 'calendar', label: 'Calendar & availability' },
             { id: 'content', label: 'Website content' },
-            { id: 'reports', label: 'Reports' },
           ].map(({ id, label }) => (
             <button key={id} type="button" onClick={() => { setActiveTab(id as typeof activeTab); setSelectedId(''); }} className={`min-h-11 min-w-max flex-1 rounded-sm px-3 py-2.5 text-center text-xs font-bold sm:min-w-0 sm:px-4 sm:text-sm ${activeTab === id ? 'bg-[#0f4d3c] text-white' : 'text-[#66736f] hover:bg-[#f2f7f4] hover:text-[#0f4d3c]'}`}>{label}</button>
           ))}
@@ -298,7 +284,6 @@ export const AdminPanel: React.FC = () => {
             onSelectAppointment={(id) => {
               setStatusFilter('all');
               setAppointmentDateFilter('');
-              setServiceFilter('all');
               setPriorityOnly(false);
               setSearch('');
               setSelectedId(id);
@@ -307,8 +292,6 @@ export const AdminPanel: React.FC = () => {
           />
         ) : activeTab === 'content' ? (
           <AdminContentManager />
-        ) : activeTab === 'reports' ? (
-          <AdminReports appointments={appointments} />
         ) : (
         <section className="grid min-w-0 overflow-hidden rounded-md border border-[#dce7e1] bg-white shadow-sm lg:min-h-[640px] lg:grid-cols-[350px_minmax(0,1fr)]">
           <aside className={`${selected ? 'hidden lg:block' : ''} min-w-0 border-b border-[#dce7e1] lg:border-b-0 lg:border-r`}>
@@ -328,9 +311,8 @@ export const AdminPanel: React.FC = () => {
               {activeTab === 'requests' && <div className="mt-3 flex gap-1 overflow-x-auto pb-1">
                 {[
                   ['all', 'All'],
-                  ['pending', 'Pending'],
                   ['confirmed', 'Accepted'],
-                  ['rejected', 'Rejected'],
+                  ['history', 'Cancelled'],
                 ].map(([value, label]) => (
                   <button key={value} type="button" onClick={() => setStatusFilter(value)} className={`min-h-11 shrink-0 whitespace-nowrap px-3 text-xs font-bold ${statusFilter === value ? 'bg-[#173a37] text-white' : 'bg-[#f1f4f1] text-[#66736f] hover:bg-[#e7ede8]'}`}>{label}</button>
                 ))}
@@ -340,12 +322,6 @@ export const AdminPanel: React.FC = () => {
                 <input type="date" value={appointmentDateFilter} onChange={(event) => setAppointmentDateFilter(event.target.value)} className="mt-1 block min-h-10 w-full border border-[#d9e1dc] bg-white px-3 text-xs text-[#17312e]" />
               </label>
               {appointmentDateFilter && <button type="button" onClick={() => setAppointmentDateFilter('')} className="mt-1 min-h-9 text-xs font-semibold text-[#17645c] underline">Clear date filter</button>}
-              <label className="mt-2 block text-[11px] font-semibold text-[#66736f]">Service
-                <select value={serviceFilter} onChange={(event) => setServiceFilter(event.target.value)} className="mt-1 block min-h-10 w-full border border-[#d9e1dc] bg-white px-3 text-xs text-[#17312e]">
-                  <option value="all">All services</option>
-                  {services.map((service) => <option key={service} value={service}>{service}</option>)}
-                </select>
-              </label>
             </div>
             <div className="max-h-[420px] overflow-y-auto lg:max-h-[calc(100vh-360px)]">
               {loading ? <p className="p-5 text-sm text-[#66736f]">Loading requests...</p> : filteredAppointments.map((appointment) => (
@@ -392,7 +368,6 @@ export const AdminPanel: React.FC = () => {
                     <button type="button" disabled={selected.status !== 'pending'} onClick={() => void performAction('approve', selected)} className="flex min-h-11 items-center justify-center gap-2 bg-[#17645c] px-2 text-sm font-bold text-white hover:bg-[#104f49] disabled:cursor-not-allowed disabled:opacity-50"><Check className="h-4 w-4 shrink-0" />Accept request</button>
                     <button type="button" disabled={selected.status === 'rejected' || selected.status === 'cancelled' || selected.status === 'completed'} onClick={() => void performAction('reject', selected)} className="flex min-h-11 items-center justify-center gap-2 border border-rose-200 px-2 text-sm font-bold text-rose-700 hover:bg-rose-50 disabled:cursor-not-allowed disabled:opacity-50"><X className="h-4 w-4 shrink-0" />Reject request</button>
                     {selected.status === 'confirmed' && <button type="button" onClick={() => void performAction('complete', selected)} className="flex min-h-11 items-center justify-center gap-2 border border-sky-200 px-2 text-sm font-bold text-sky-800 hover:bg-sky-50"><CheckCircle2 className="h-4 w-4 shrink-0" />Mark completed / remove from schedule</button>}
-                    <button type="button" onClick={() => void performAction('delete_appointment', selected)} className="flex min-h-11 items-center justify-center gap-2 border border-rose-300 px-2 text-sm font-bold text-rose-800 hover:bg-rose-50"><Trash2 className="h-4 w-4 shrink-0" />Delete appointment record</button>
                     {selected.status !== 'completed' && selected.chat_status !== 'deleted' && <button type="button" onClick={() => void performAction(selected.chat_status === 'closed' ? 'chat_open' : 'chat_close', selected)} className="flex min-h-11 items-center justify-center gap-2 border border-[#d9e1dc] px-2 text-sm font-bold hover:bg-[#f4f6f3]"><LockKeyhole className="h-4 w-4 shrink-0" />{selected.chat_status === 'closed' ? 'Open patient chat' : 'Close patient chat'}</button>}
                   </div>
                 </div>
