@@ -88,7 +88,6 @@ export const AdminPanel: React.FC = () => {
   const [selectedId, setSelectedId] = useState<string>('');
   const [statusFilter, setStatusFilter] = useState('all');
   const [appointmentDateFilter, setAppointmentDateFilter] = useState('');
-  const [priorityOnly, setPriorityOnly] = useState(false);
   const [search, setSearch] = useState('');
   const [chatInput, setChatInput] = useState('');
   const [loading, setLoading] = useState(true);
@@ -138,14 +137,18 @@ export const AdminPanel: React.FC = () => {
         : activeTab === 'missed'
           ? appointment.status === 'missed'
           : activeTab === 'priority'
-            ? !['completed', 'missed'].includes(appointment.status) && getPriorityCategoryLabels(appointment.priority_categories ?? '').length > 0
+            ? getPriorityCategoryLabels(appointment.priority_categories ?? '').length > 0
+              && (statusFilter === 'all'
+                ? !['completed', 'missed'].includes(appointment.status)
+                : statusFilter === 'history'
+                  ? appointment.status === 'cancelled'
+                  : appointment.status === statusFilter)
           : statusFilter === 'all'
             ? appointment.status !== 'missed'
             : statusFilter === 'history'
               ? appointment.status === 'cancelled'
               : appointment.status === statusFilter;
       const matchesDate = !appointmentDateFilter || appointment.preferred_date === appointmentDateFilter;
-      const matchesPriority = !priorityOnly || getPriorityCategoryLabels(appointment.priority_categories ?? '').length > 0;
       const matchesSearch = !query || [
         appointment.patient_name,
         appointment.reference_code,
@@ -156,12 +159,12 @@ export const AdminPanel: React.FC = () => {
         String(appointment.age ?? ''),
         getPriorityCategoryLabels(appointment.priority_categories ?? '').join(' '),
       ].some((value) => String(value ?? '').toLowerCase().includes(query));
-      return matchesStatus && matchesDate && matchesPriority && matchesSearch;
+      return matchesStatus && matchesDate && matchesSearch;
     }).sort((left, right) => left.preferred_date.localeCompare(right.preferred_date)
       || (getAppointmentTimeMinutes(left.preferred_time) ?? Number.POSITIVE_INFINITY)
         - (getAppointmentTimeMinutes(right.preferred_time) ?? Number.POSITIVE_INFINITY)
       || left.created_at.localeCompare(right.created_at));
-  }, [activeTab, appointmentDateFilter, appointments, priorityOnly, search, statusFilter]);
+  }, [activeTab, appointmentDateFilter, appointments, search, statusFilter]);
 
   useEffect(() => {
     if (selectedId && !filteredAppointments.some((appointment) => appointment.id === selectedId)) {
@@ -283,8 +286,8 @@ export const AdminPanel: React.FC = () => {
           {[
             { id: 'requests', label: 'Appointment requests' },
             { id: 'priority', label: `Priority appointments (${counts.priority})` },
-            { id: 'completed', label: `Completed records (${counts.completed})` },
-            { id: 'missed', label: `Missed appointments (${counts.missed})` },
+            { id: 'completed', label: 'Completed records' },
+            { id: 'missed', label: 'Missed appointments' },
             { id: 'calendar', label: 'Calendar & availability' },
             { id: 'content', label: 'Website content' },
           ].map(({ id, label }) => (
@@ -301,7 +304,6 @@ export const AdminPanel: React.FC = () => {
             onSelectAppointment={(id) => {
               setStatusFilter('all');
               setAppointmentDateFilter('');
-              setPriorityOnly(false);
               setSearch('');
               setSelectedId(id);
               setActiveTab('requests');
@@ -326,7 +328,7 @@ export const AdminPanel: React.FC = () => {
                 <Search className="h-4 w-4 shrink-0" />
                 <input value={search} onChange={(event) => setSearch(event.target.value)} placeholder="Search patient or reference" className="min-w-0 flex-1 text-xs text-[#17312e] outline-none" />
               </label>
-              {activeTab === 'requests' && <div className="mt-3 flex gap-1 overflow-x-auto pb-1">
+              {['requests', 'priority'].includes(activeTab) && <div className="mt-3 flex gap-1 overflow-x-auto pb-1">
                 {[
                   ['all', 'All'],
                   ['confirmed', 'Accepted'],
@@ -334,7 +336,6 @@ export const AdminPanel: React.FC = () => {
                 ].map(([value, label]) => (
                   <button key={value} type="button" onClick={() => setStatusFilter(value)} className={`min-h-11 shrink-0 whitespace-nowrap px-3 text-xs font-bold ${statusFilter === value ? 'bg-[#173a37] text-white' : 'bg-[#f1f4f1] text-[#66736f] hover:bg-[#e7ede8]'}`}>{label}</button>
                 ))}
-                <button type="button" aria-pressed={priorityOnly} onClick={() => setPriorityOnly((current) => !current)} className={`min-h-11 shrink-0 whitespace-nowrap px-3 text-xs font-bold ${priorityOnly ? 'bg-[#173a37] text-white' : 'bg-[#f1f4f1] text-[#66736f] hover:bg-[#e7ede8]'}`}>Priority only</button>
               </div>}
               <label className="mt-2 block text-[11px] font-semibold text-[#66736f]">Appointment date
                 <input type="date" value={appointmentDateFilter} onChange={(event) => setAppointmentDateFilter(event.target.value)} className="mt-1 block min-h-10 w-full border border-[#d9e1dc] bg-white px-3 text-xs text-[#17312e]" />

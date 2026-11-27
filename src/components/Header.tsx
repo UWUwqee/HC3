@@ -54,9 +54,6 @@ export const Header: React.FC = () => {
           </nav>
 
           <div className="hidden xl:flex items-center gap-4 shrink-0">
-            <button type="button" onClick={() => setAccessibilityOpen(true)} aria-label={language === 'fil' ? 'Mga setting ng accessibility' : 'Accessibility settings'} title={language === 'fil' ? 'Accessibility' : 'Accessibility'} className="flex h-10 w-10 items-center justify-center text-[#4b5563] hover:bg-[#eaf3ee] hover:text-[#0f4d3c]">
-              <Accessibility className="h-5 w-5" aria-hidden="true" />
-            </button>
             <button
               type="button"
               onClick={() => setAccessibilityOpen(true)}
@@ -86,9 +83,6 @@ export const Header: React.FC = () => {
           </div>
 
           <div className="flex items-center gap-1 xl:hidden sm:gap-2">
-            <button type="button" onClick={() => setAccessibilityOpen(true)} className="flex h-11 w-11 shrink-0 items-center justify-center text-[#4b5563] hover:bg-[#eaf3ee] hover:text-[#0f4d3c]" aria-label={language === 'fil' ? 'Mga setting ng accessibility' : 'Accessibility settings'}>
-              <Accessibility className="h-5 w-5" aria-hidden="true" />
-            </button>
             <button
               type="button"
               onClick={() => setAccessibilityOpen(true)}
@@ -99,12 +93,7 @@ export const Header: React.FC = () => {
             >
               <Accessibility className="h-5 w-5" aria-hidden="true" />
             </button>
-            {isSignedIn
-              ? <button type="button" onClick={() => setMessagesOpen(true)} className="relative flex h-11 w-11 shrink-0 items-center justify-center text-[#4b5563] hover:text-[#0f4d3c] xl:hidden" aria-label={`Messages${unreadAdminMessageCount > 0 ? `, ${unreadAdminMessageCount} unread` : ''}`} title={unreadMessagesError || (unreadAdminMessageCount > 0 ? `${unreadAdminMessageCount} unread message${unreadAdminMessageCount === 1 ? '' : 's'}` : 'Messages')}>
-                <Mail className="h-5 w-5" />
-                {unreadAdminMessageCount > 0 && <span aria-hidden="true" className="absolute right-0 top-0 flex h-5 min-w-5 items-center justify-center rounded-full bg-rose-600 px-1 text-[10px] font-bold leading-none text-white">{unreadAdminMessageCount > 99 ? '99+' : unreadAdminMessageCount}</span>}
-              </button>
-              : <button type="button" onClick={() => setAuthModalOpen(true)} className="flex min-h-11 items-center gap-2 rounded-md bg-[#0f4d3c] px-3 text-xs font-bold text-white hover:bg-[#2c7a5f] xl:hidden">
+            {!isSignedIn && <button type="button" onClick={() => setAuthModalOpen(true)} className="flex min-h-11 items-center gap-2 rounded-md bg-[#0f4d3c] px-3 text-xs font-bold text-white hover:bg-[#2c7a5f] xl:hidden">
                 <LogIn className="h-4 w-4" />Log in
               </button>}
             <button
