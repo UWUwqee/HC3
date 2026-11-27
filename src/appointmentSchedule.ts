@@ -35,6 +35,13 @@ export function getEarliestAppointmentDate(now = new Date()) {
   return tomorrow.toISOString().slice(0, 10);
 }
 
+export function getLatestAppointmentDate(now = new Date()) {
+  const { date } = getManilaAppointmentClock(now);
+  const latestDate = new Date(`${date}T12:00:00Z`);
+  latestDate.setUTCDate(latestDate.getUTCDate() + 30);
+  return latestDate.toISOString().slice(0, 10);
+}
+
 export function getAppointmentTimeMinutes(value: string) {
   const match = /^([01]\d|2[0-3]):([0-5]\d)$/.exec(value);
   return match ? Number(match[1]) * 60 + Number(match[2]) : null;
@@ -42,7 +49,10 @@ export function getAppointmentTimeMinutes(value: string) {
 
 export function isAppointmentTimeAvailable(date: string, time: string, now = new Date()) {
   const slotMinutes = getAppointmentTimeMinutes(time);
-  if (!APPOINTMENT_TIME_SLOTS.includes(time) || slotMinutes === null || date < getEarliestAppointmentDate(now)) return false;
+  if (!APPOINTMENT_TIME_SLOTS.includes(time)
+    || slotMinutes === null
+    || date < getEarliestAppointmentDate(now)
+    || date > getLatestAppointmentDate(now)) return false;
   const clock = getManilaAppointmentClock(now);
   return date !== clock.date || slotMinutes > clock.minutes;
 }

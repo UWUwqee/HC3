@@ -9,7 +9,7 @@ import { PublicInformation } from './components/PublicInformation';
 import { AppointmentSchedule } from './components/AppointmentSchedule';
 import { Footer } from './components/Footer';
 import { OutreachBookingModal } from './components/OutreachBookingModal';
-import { CheckCircle2 } from 'lucide-react';
+import { CheckCircle2, MessageCircleMore } from 'lucide-react';
 import { AuthScreen } from './components/AuthScreen';
 import { AdminPanel } from './components/AdminPanel';
 import { UserAppointmentChat } from './components/UserAppointmentChat';
@@ -26,6 +26,9 @@ const AppContent: React.FC = () => {
     isSignedIn,
     authModalOpen,
     setAuthModalOpen,
+    setMessagesOpen,
+    unreadAdminMessageCount,
+    unreadMessagesError,
   } = useHealthCenter();
 
   useEffect(() => {
@@ -52,6 +55,23 @@ const AppContent: React.FC = () => {
         {language === 'fil' ? 'Lumaktaw sa pangunahing nilalaman' : 'Skip to main content'}
       </a>
       <Header />
+      {isSignedIn && (
+        <button
+          type="button"
+          onClick={() => setMessagesOpen(true)}
+          aria-label={`${language === 'fil' ? 'Mga mensahe' : 'Messages'}${unreadAdminMessageCount > 0 ? `, ${unreadAdminMessageCount} unread` : ''}`}
+          aria-haspopup="dialog"
+          title={unreadMessagesError || (unreadAdminMessageCount > 0 ? `${unreadAdminMessageCount} unread message${unreadAdminMessageCount === 1 ? '' : 's'}` : 'Messages')}
+          className="fixed bottom-[max(1.25rem,env(safe-area-inset-bottom))] right-[max(1.25rem,env(safe-area-inset-right))] z-40 flex h-14 w-14 items-center justify-center rounded-full bg-[#0f4d3c] text-white shadow-lg ring-2 ring-white transition-colors hover:bg-[#17645c] focus-visible:outline-2 focus-visible:outline-offset-4 focus-visible:outline-[#17645c] xl:hidden"
+        >
+          <MessageCircleMore className="h-7 w-7" aria-hidden="true" />
+          {unreadAdminMessageCount > 0 && (
+            <span aria-hidden="true" className="absolute -right-1 -top-1 flex h-5 min-w-5 items-center justify-center rounded-full bg-rose-600 px-1 text-[10px] font-bold leading-none text-white">
+              {unreadAdminMessageCount > 99 ? '99+' : unreadAdminMessageCount}
+            </span>
+          )}
+        </button>
+      )}
 
       {(appointmentRequestAvailability === 'pending' || appointmentRequestAvailability === 'confirmed') && (
         <div role="status" aria-live="polite" className={`hidden border-b px-4 py-3 text-center text-sm font-semibold sm:block ${appointmentRequestAvailability === 'pending' ? 'border-amber-200 bg-amber-50 text-amber-950' : 'border-emerald-200 bg-emerald-50 text-emerald-950'}`}>

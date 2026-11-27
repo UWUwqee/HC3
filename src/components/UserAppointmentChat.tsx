@@ -292,7 +292,11 @@ export const UserAppointmentChat: React.FC = () => {
                     <MessageCircle className="h-4 w-4 shrink-0 text-[#17645c]" aria-hidden="true" />
                     <div className="min-w-0">
                       <p className="truncate text-[13px] font-bold text-[#17312e]">{selectedAppointment.service_name}</p>
-                      <p className="text-[10px] text-[#66736f]">{selectedAppointment.chat_status === 'closed' ? (isFilipino ? 'Sarado ang chat ng clinic staff' : 'Chat closed by clinic staff') : (isFilipino ? 'Bukas ang chat' : 'Chat open')}</p>
+                      <p className="text-[10px] text-[#66736f]">{selectedAppointment.status === 'missed'
+                        ? (isFilipino ? 'Sarado ang chat dahil hindi nadaluhan ang appointment' : 'Chat closed because the appointment was missed')
+                        : selectedAppointment.chat_status === 'closed'
+                          ? (isFilipino ? 'Sarado ang chat ng clinic staff' : 'Chat closed by clinic staff')
+                          : (isFilipino ? 'Bukas ang chat' : 'Chat open')}</p>
                     </div>
                   </div>
                   {['pending', 'confirmed'].includes(selectedAppointment.status) && (
