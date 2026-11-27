@@ -1,10 +1,11 @@
-import React, { useState } from 'react';
+import React, { useCallback, useState } from 'react';
+import { useClerk } from '@clerk/react';
 import { useHealthCenter } from '../context/HealthCenterContext';
-import { Menu, X, Globe, CalendarDays, LogOut, Mail } from 'lucide-react';
-import { signOut } from 'firebase/auth';
-import { auth } from '../firebase';
+import { Menu, X, Globe, CalendarDays, LogOut, Mail, Accessibility } from 'lucide-react';
+import { AccessibilityTools } from './AccessibilityTools';
 
 export const Header: React.FC = () => {
+  const { signOut } = useClerk();
   const {
     t,
     language,
@@ -18,9 +19,11 @@ export const Header: React.FC = () => {
     unreadAdminMessageCount,
     unreadMessagesError,
   } = useHealthCenter();
-  const bookingEnabled = clinicOpen === true && appointmentRequestAvailability === 'available';
+  const bookingEnabled = appointmentRequestAvailability === 'available';
 
   const [mobileMenuOpen, setMobileMenuOpen] = useState(false);
+  const [accessibilityOpen, setAccessibilityOpen] = useState(false);
+  const closeAccessibility = useCallback(() => setAccessibilityOpen(false), []);
 
   const navLinks = [
     { id: 'overview', label: 'HOME' },
@@ -64,6 +67,9 @@ export const Header: React.FC = () => {
           </nav>
 
           <div className="hidden xl:flex items-center gap-4 shrink-0">
+            <button type="button" onClick={() => setAccessibilityOpen(true)} aria-label={language === 'fil' ? 'Mga setting ng accessibility' : 'Accessibility settings'} title={language === 'fil' ? 'Accessibility' : 'Accessibility'} className="flex h-10 w-10 items-center justify-center text-[#4b5563] hover:bg-[#eaf3ee] hover:text-[#0f4d3c]">
+              <Accessibility className="h-5 w-5" aria-hidden="true" />
+            </button>
             <button
               onClick={toggleLanguage}
               className="flex min-h-9 items-center gap-1.5 px-2 text-[#4b5563] hover:text-[#0f4d3c] transition-colors cursor-pointer"
@@ -80,12 +86,15 @@ export const Header: React.FC = () => {
               <Mail className="h-5 w-5" />
               {unreadAdminMessageCount > 0 && <span aria-hidden="true" className="absolute -right-1 -top-1 flex h-5 min-w-5 items-center justify-center rounded-full bg-rose-600 px-1 text-[10px] font-bold leading-none text-white">{unreadAdminMessageCount > 99 ? '99+' : unreadAdminMessageCount}</span>}
             </button>
-            <button type="button" onClick={() => void signOut(auth)} className="p-2 text-[#4b5563] hover:text-[#0f4d3c]" aria-label="Sign out" title="Sign out">
+            <button type="button" onClick={() => void signOut()} className="p-2 text-[#4b5563] hover:text-[#0f4d3c]" aria-label="Sign out" title="Sign out">
               <LogOut className="w-4 h-4" />
             </button>
           </div>
 
           <div className="flex items-center gap-1 xl:hidden sm:gap-2">
+            <button type="button" onClick={() => setAccessibilityOpen(true)} className="flex h-11 w-11 shrink-0 items-center justify-center text-[#4b5563] hover:bg-[#eaf3ee] hover:text-[#0f4d3c]" aria-label={language === 'fil' ? 'Mga setting ng accessibility' : 'Accessibility settings'}>
+              <Accessibility className="h-5 w-5" aria-hidden="true" />
+            </button>
             <button
               onClick={toggleLanguage}
               className="flex h-11 w-11 shrink-0 items-center justify-center text-[#4b5563] hover:text-[#0f4d3c] xl:hidden"
@@ -134,13 +143,14 @@ export const Header: React.FC = () => {
               <CalendarDays className="w-4 h-4" />
               <span>REQUEST AN APPOINTMENT</span>
             </button>}
-            <button type="button" onClick={() => void signOut(auth)} className="mt-2 flex min-h-11 w-full items-center justify-center gap-2 rounded-md border border-[#dce7e1] px-4 text-sm font-semibold text-[#4b5563] hover:bg-[#f2f7f4]">
+            <button type="button" onClick={() => void signOut()} className="mt-2 flex min-h-11 w-full items-center justify-center gap-2 rounded-md border border-[#dce7e1] px-4 text-sm font-semibold text-[#4b5563] hover:bg-[#f2f7f4]">
               <LogOut className="h-4 w-4" />
               Sign out
             </button>
           </div>
         </div>
       )}
+      <AccessibilityTools open={accessibilityOpen} onClose={closeAccessibility} />
     </header>
   );
 };

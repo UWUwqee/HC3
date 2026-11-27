@@ -1,1 +1,54 @@
 @import "tailwindcss";
+
+html {
+  font-size: var(--accessibility-font-size, 100%);
+}
+
+html[data-accessibility-text-spacing="true"] body {
+  letter-spacing: 0.035em;
+  line-height: 1.75;
+  word-spacing: 0.12em;
+}
+
+html[data-accessibility-dyslexia-font="true"] body {
+  font-family: Arial, Helvetica, sans-serif;
+  letter-spacing: 0.025em;
+}
+
+html[data-accessibility-highlight-links="true"] :is(a, button, input, select, textarea):focus-visible {
+  outline: 3px solid #d97706;
+  outline-offset: 3px;
+  text-decoration: underline;
+}
+
+html[data-accessibility-contrast="high"] :is(a, button, input, select, textarea) {
+  border-color: #111827;
+  outline-color: #111827;
+}
+
+html[data-accessibility-contrast="smart"] :is(a, button, input, select, textarea):focus-visible {
+  outline: 3px solid #7c2d12;
+  outline-offset: 2px;
+}
+
+html[data-accessibility-large-cursor="true"] body {
+  cursor: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='32' height='32' viewBox='0 0 32 32'%3E%3Cpath d='M4 2v24l6-6 4 9 4-2-4-9 9 1z' fill='black' stroke='white' stroke-width='2'/%3E%3C/svg%3E") 4 2, auto;
+}
+
+html[data-accessibility-touch-targets="true"] :is(button, input, select, textarea, a) {
+  scroll-margin-block: 0.5rem;
+}
+
+html[data-accessibility-touch-targets="true"] button,
+html[data-accessibility-touch-targets="true"] a {
+  min-height: 2.75rem;
+}
+
+html[data-accessibility-reduce-motion="true"] *,
+html[data-accessibility-reduce-motion="true"] *::before,
+html[data-accessibility-reduce-motion="true"] *::after {
+  animation-duration: 0.01ms !important;
+  animation-iteration-count: 1 !important;
+  scroll-behavior: auto !important;
+  transition-duration: 0.01ms !important;
+}

@@ -1,11 +1,11 @@
 import React, { createContext, useContext, useEffect, useState } from 'react';
 import type { Dispatch, ReactNode, SetStateAction } from 'react';
-import { auth } from '../firebase';
+import { useAuth } from '@clerk/react';
 import { DEFAULT_CLINIC_PUBLIC_SETTINGS, SERVICES_DATA } from '../data/healthCenterData';
 import type { ClinicPublicSettings, PublicSiteContent } from '../types';
 
 export type Language = 'en' | 'fil';
-export type AppointmentRequestAvailability = 'checking' | 'available' | 'pending' | 'error';
+export type AppointmentRequestAvailability = 'checking' | 'available' | 'pending' | 'confirmed' | 'error';
 
 export interface PatientAppointment {
   id: string;
@@ -106,6 +106,7 @@ interface AppointmentApiRow {
 interface HealthCenterContextValue {
   t: (typeof TRANSLATIONS)['en'];
   language: Language;
+  setLanguage: (language: Language) => void;
   toggleLanguage: () => void;
   activeSection: string;
   setActiveSection: (section: string) => void;
@@ -118,6 +119,7 @@ interface HealthCenterContextValue {
   selectedProgramForBooking: string;
   openBookingForProgram: (programId: string) => void;
   markAppointmentRequestPending: () => void;
+  markAppointmentRequestStatus: (status: 'pending' | 'confirmed' | 'available') => void;
   appointments: PatientAppointment[];
   cancelAppointment: (id: string) => Promise<void>;
   messagesOpen: boolean;
@@ -134,6 +136,7 @@ function normalizedStatus(value: unknown): PatientAppointment['status'] {
   const status = typeof value === 'string' ? value.toLowerCase() : '';
   if (status === 'confirmed') return 'Confirmed';
   if (status === 'rejected') return 'Rejected';
+  if (status === 'missed') return 'Missed';
   if (status === 'cancelled' || status === 'canceled') return 'Cancelled';
   return 'Pending';
 }
@@ -153,7 +156,8 @@ function appointmentFromApi(row: AppointmentApiRow): PatientAppointment {
 }
 
 export const HealthCenterProvider: React.FC<{ children: ReactNode }> = ({ children }) => {
-  const [language, setLanguage] = useState<Language>(() => (
+  const { getToken, isSignedIn } = useAuth();
+  const [language, setLanguageState] = useState<Language>(() => (
     localStorage.getItem('masikap-language') === 'fil' ? 'fil' : 'en'
   ));
   const [activeSection, setActiveSectionState] = useState('overview');
@@ -170,11 +174,11 @@ export const HealthCenterProvider: React.FC<{ children: ReactNode }> = ({ childr
   const [notificationToast, setNotificationToast] = useState('');
 
   const setActiveSection = (section: string) => setActiveSectionState(section);
-  const toggleLanguage = () => setLanguage((current) => {
-    const next = current === 'en' ? 'fil' : 'en';
+  const setLanguage = (next: Language) => {
     localStorage.setItem('masikap-language', next);
-    return next;
-  });
+    setLanguageState(next);
+  };
+  const toggleLanguage = () => setLanguage(language === 'en' ? 'fil' : 'en');
   const setBookingModalOpen = (open: boolean) => {
     setBookingModalOpenState(open);
     if (!open) setSelectedProgramForBooking('');
@@ -184,18 +188,19 @@ export const HealthCenterProvider: React.FC<{ children: ReactNode }> = ({ childr
     setBookingModalOpenState(true);
   };
   const markAppointmentRequestPending = () => setAppointmentRequestAvailability('pending');
+  const markAppointmentRequestStatus = (status: 'pending' | 'confirmed' | 'available') => setAppointmentRequestAvailability(status);
 
   useEffect(() => {
     let active = true;
-    const user = auth.currentUser;
-    if (!user) {
+    if (!isSignedIn) {
       setAppointmentRequestAvailability('error');
       setClinicStatusError('Sign in to load clinic status.');
       return () => { active = false; };
     }
 
     const requestWithToken = async (path: string) => {
-      const token = await user.getIdToken();
+      const token = await getToken();
+      if (!token) throw new Error('Your Clerk session could not be loaded. Please sign in again.');
       return fetch(path, {
         headers: { Authorization: `Bearer ${token}` },
         cache: 'no-store',
@@ -247,7 +252,9 @@ export const HealthCenterProvider: React.FC<{ children: ReactNode }> = ({ childr
         setAppointments(nextAppointments);
         setAppointmentRequestAvailability(nextAppointments.some((appointment) => appointment.status === 'Pending')
           ? 'pending'
-          : 'available');
+          : nextAppointments.some((appointment) => appointment.status === 'Confirmed')
+            ? 'confirmed'
+            : 'available');
       } catch {
         if (active) setAppointmentRequestAvailability((current) => current === 'pending' ? current : 'error');
       }
@@ -281,13 +288,13 @@ export const HealthCenterProvider: React.FC<{ children: ReactNode }> = ({ childr
       active = false;
       window.clearInterval(timer);
     };
-  }, []);
+  }, [getToken, isSignedIn]);
 
   const cancelAppointment = async (id: string) => {
     const appointment = appointments.find((item) => item.id === id);
-    const user = auth.currentUser;
-    if (!appointment || !user) return;
-    const token = await user.getIdToken();
+    if (!appointment) return;
+    const token = await getToken();
+    if (!token) throw new Error('Your Clerk session could not be loaded. Please sign in again.');
     const response = await fetch('/api/appointments', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${token}` },
@@ -296,12 +303,14 @@ export const HealthCenterProvider: React.FC<{ children: ReactNode }> = ({ childr
     const result = await response.json() as { error?: string };
     if (!response.ok) throw new Error(result.error || 'Appointment could not be cancelled.');
     setAppointments((current) => current.map((item) => item.id === id ? { ...item, status: 'Cancelled' } : item));
+    setAppointmentRequestAvailability('available');
   };
 
   return (
     <HealthCenterContext.Provider value={{
       t: TRANSLATIONS[language],
       language,
+      setLanguage,
       toggleLanguage,
       activeSection,
       setActiveSection,
@@ -314,6 +323,7 @@ export const HealthCenterProvider: React.FC<{ children: ReactNode }> = ({ childr
       selectedProgramForBooking,
       openBookingForProgram,
       markAppointmentRequestPending,
+      markAppointmentRequestStatus,
       appointments,
       cancelAppointment,
       messagesOpen,

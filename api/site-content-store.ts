@@ -73,6 +73,12 @@ export async function ensureSiteContent(db: ReturnType<typeof createClient>) {
         args: [key, String(value), now],
       })),
     ], 'write');
+    await db.execute({
+      sql: `UPDATE clinic_public_settings
+            SET setting_value = ?, updated_at = ?
+            WHERE setting_key = 'contactPhone' AND trim(setting_value) = ''`,
+      args: [DEFAULT_CLINIC_PUBLIC_SETTINGS.contactPhone, new Date().toISOString()],
+    });
   })().catch((error: unknown) => {
     initialized = null;
     throw error;
@@ -131,7 +137,7 @@ export function validateSiteContent(
     if (typeof value[field] !== 'string' || value[field].length > 5000) return null;
   }
   if (contentType === 'service') {
-    if (!['maternity', 'checkup', 'family_planning', 'vaccination'].includes(String(value.category))) return null;
+    if (!['maternity', 'checkup', 'family_planning', 'vaccination', 'animal_bite'].includes(String(value.category))) return null;
     for (const field of ['keyPersonnel', 'requirements', 'requirementsFil']) {
       if (!Array.isArray(value[field]) || value[field].length > 50
         || value[field].some((entry) => typeof entry !== 'string' || entry.length > 300)) return null;

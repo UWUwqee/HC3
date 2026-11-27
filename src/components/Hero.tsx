@@ -1,13 +1,20 @@
 import React from 'react';
 import { useHealthCenter } from '../context/HealthCenterContext';
-import { CalendarDays, ArrowDown, Clock3, MapPin } from 'lucide-react';
+import { CalendarDays, ArrowDown, Clock3, MapPin, PhoneCall } from 'lucide-react';
 import { CLINIC_ADDRESS } from '../data/masikapClinicInfo';
 import centerPhoto from '../assets/images/MASIKAP.png';
 
 export const Hero: React.FC = () => {
   const { language, setActiveSection, setBookingModalOpen, clinicOpen, clinicStatusError, appointmentRequestAvailability, siteContent } = useHealthCenter();
   const clinicHours = language === 'fil' ? siteContent.settings.clinicHoursFil : siteContent.settings.clinicHours;
-  const bookingEnabled = clinicOpen === true && appointmentRequestAvailability === 'available';
+  const bookingEnabled = appointmentRequestAvailability === 'available';
+  const supportPhones = siteContent.settings.contactPhone.split(/\s+(?:and|or)\s+|\/|,/i).map((phone) => phone.trim()).filter(Boolean).slice(0, 2);
+  const phoneLink = (phone: string) => {
+    const digits = phone.replace(/\D/g, '');
+    if (digits.startsWith('0')) return `+63${digits.slice(1)}`;
+    if (digits.startsWith('63')) return `+${digits}`;
+    return `+63${digits}`;
+  };
 
   const handleScrollTo = (id: string) => {
     setActiveSection(id);
@@ -38,6 +45,23 @@ export const Hero: React.FC = () => {
               </div>
             </div>
           </div>
+          <aside aria-label={language === 'fil' ? 'Suporta sa appointment' : 'Appointment support'} className="w-full max-w-sm border border-white/25 bg-emerald-950/35 p-4 text-left shadow-lg sm:shrink-0 sm:p-5">
+            <div className="flex items-center gap-2 text-sm font-bold text-white">
+              <PhoneCall className="h-4 w-4 text-emerald-200" aria-hidden="true" />
+              {language === 'fil' ? 'Kailangan ng tulong sa appointment?' : 'Need help booking?'}
+            </div>
+            <p className="mt-2 text-xs leading-relaxed text-white/80">
+              {language === 'fil' ? 'Tumawag sa aming kawani para matulungan ka.' : 'Call our staff for help with your appointment.'}
+            </p>
+            <div className="mt-3 space-y-1 rounded bg-white px-3 py-2 text-[#0f4d3c]">
+              {supportPhones.map((phone) => (
+                <a key={phone} href={`tel:${phoneLink(phone)}`} className="flex min-h-9 items-center justify-center gap-2 text-sm font-bold hover:text-emerald-800">
+                  <PhoneCall className="h-4 w-4 shrink-0" aria-hidden="true" />
+                  {language === 'fil' ? 'Tumawag sa' : 'Call'} {phone}
+                </a>
+              ))}
+            </div>
+          </aside>
           <div className={`flex min-h-24 min-w-56 items-center justify-center gap-4 self-end rounded-md border px-7 py-5 text-xl font-extrabold shadow-lg sm:min-h-28 sm:min-w-64 sm:self-center sm:px-9 sm:text-2xl ${clinicStatusError || clinicOpen === null ? 'border-slate-200/50 bg-slate-950/45' : clinicOpen ? 'border-emerald-200/50 bg-emerald-950/50' : 'border-rose-200/60 bg-rose-950/55'}`} role="status" aria-live="polite">
             <span className={`h-4 w-4 shrink-0 rounded-full ring-4 ${clinicStatusError || clinicOpen === null ? 'bg-slate-400 ring-slate-300/20' : clinicOpen ? 'bg-emerald-400 ring-emerald-300/20' : 'bg-rose-400 ring-rose-300/20'}`} />
             {clinicStatusError || clinicOpen === null

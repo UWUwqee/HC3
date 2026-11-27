@@ -12,7 +12,7 @@ export const DEFAULT_CLINIC_PUBLIC_SETTINGS: ClinicPublicSettings = {
   dentalHoursFil: '',
   clinicAddress: CLINIC_ADDRESS,
   clinicAddressFil: CLINIC_ADDRESS,
-  contactPhone: '',
+  contactPhone: '+63 2-643 6884',
   contactEmail: '',
   emergencyPhone: '',
   emergencyPhoneFil: '',

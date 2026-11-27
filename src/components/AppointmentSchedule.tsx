@@ -2,11 +2,20 @@ import React, { useEffect, useState } from 'react';
 import { CalendarDays, Clock3, MapPin } from 'lucide-react';
 import { useHealthCenter } from '../context/HealthCenterContext';
 import { CLINIC_ADDRESS } from '../data/masikapClinicInfo';
+import { formatAppointmentTime, getAppointmentTimeMinutes } from '../appointmentSchedule';
 
 interface ScheduleSlot {
   date: string;
   time: string;
   bookedCount: number;
+  services?: Array<{ id: string; name: string }>;
+}
+
+interface PriorityScheduleSlot {
+  date: string;
+  time: string;
+  priorityCount: number;
+  services?: Array<{ id: string; name: string }>;
 }
 
 function dateLabel(value: string) {
@@ -20,8 +29,10 @@ export const AppointmentSchedule: React.FC = () => {
   const isFilipino = language === 'fil';
   const settings = siteContent.settings;
   const [slots, setSlots] = useState<ScheduleSlot[]>([]);
+  const [prioritySlots, setPrioritySlots] = useState<PriorityScheduleSlot[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState('');
+  const [dateFilter, setDateFilter] = useState('');
 
   useEffect(() => {
     const loadSchedule = () => {
@@ -29,9 +40,13 @@ export const AppointmentSchedule: React.FC = () => {
     void fetch('/api/appointments', { signal: controller.signal })
       .then(async (response) => {
         if (!response.ok) throw new Error('Schedule unavailable');
-        return response.json() as Promise<{ slots: ScheduleSlot[] }>;
+        return response.json() as Promise<{ slots: ScheduleSlot[]; prioritySlots?: PriorityScheduleSlot[] }>;
       })
-      .then((data) => setSlots(data.slots))
+      .then((data) => {
+        setSlots(data.slots);
+        setPrioritySlots(data.prioritySlots ?? []);
+        setError('');
+      })
       .catch((caught) => {
         if (caught instanceof DOMException && caught.name === 'AbortError') return;
         setError(isFilipino ? 'Hindi ma-load ang iskedyul.' : 'Schedule could not be loaded.');
@@ -55,13 +70,22 @@ export const AppointmentSchedule: React.FC = () => {
     afternoon: isFilipino ? 'Hapon' : 'Afternoon',
     'no preference': isFilipino ? 'Anumang oras' : 'Any time',
   };
-  const timeOrder: Record<string, number> = { morning: 0, afternoon: 1, 'no preference': 2 };
   const today = new Date().toLocaleDateString('en-CA', { timeZone: 'Asia/Manila' });
-  const appointmentsByDate = slots.reduce<Record<string, ScheduleSlot[]>>((grouped, slot) => {
-    (grouped[slot.date] ??= []).push(slot);
-    return grouped;
-  }, {});
-  const dates = Object.keys(appointmentsByDate).filter((date) => date >= today).sort();
+  const priorityCountBySlot = new Map(prioritySlots.map((slot) => [`${slot.date}:${slot.time}`, slot.priorityCount]));
+  const regularSlots = slots
+    .map((slot) => ({
+      ...slot,
+      bookedCount: Math.max(0, slot.bookedCount - (priorityCountBySlot.get(`${slot.date}:${slot.time}`) ?? 0)),
+      priority: false,
+    }))
+    .filter((slot) => slot.bookedCount > 0 && slot.date >= today && (!dateFilter || slot.date === dateFilter));
+  const upcomingPrioritySlots = prioritySlots
+    .filter((slot) => slot.priorityCount > 0 && slot.date >= today && (!dateFilter || slot.date === dateFilter))
+    .map((slot) => ({ ...slot, bookedCount: slot.priorityCount, priority: true }));
+  const displaySlots = [...upcomingPrioritySlots, ...regularSlots]
+    .sort((first, second) => first.date.localeCompare(second.date)
+      || (getAppointmentTimeMinutes(first.time) ?? 1440) - (getAppointmentTimeMinutes(second.time) ?? 1440)
+      || Number(second.priority) - Number(first.priority));
 
   return (
     <section id="appointment-schedule" className="site-section-bg section-enter border-b border-[#dce7e1] py-8 sm:py-10">
@@ -79,7 +103,15 @@ export const AppointmentSchedule: React.FC = () => {
           </div>
         </div>
 
-        {loading || error || dates.length === 0 ? (
+        <div className="mb-6 flex flex-wrap items-end gap-3">
+          <label htmlFor="schedule-date-filter" className="text-sm font-semibold text-[#52635b]">
+            {isFilipino ? 'I-filter ayon sa petsa' : 'Filter by date'}
+            <input id="schedule-date-filter" type="date" min={today} value={dateFilter} onChange={(event) => setDateFilter(event.target.value)} className="mt-1 block min-h-11 border border-[#d9e1dc] bg-white px-3 text-sm text-[#17312e]" />
+          </label>
+          {dateFilter && <button type="button" onClick={() => setDateFilter('')} className="min-h-11 px-3 text-sm font-semibold text-[#17645c] hover:bg-[#eaf3ee]">{isFilipino ? 'Ipakita lahat ng petsa' : 'Show all dates'}</button>}
+        </div>
+
+        {loading || error || displaySlots.length === 0 ? (
           <div className="grid gap-6 lg:grid-cols-[minmax(0,1.3fr)_minmax(260px,0.7fr)]">
             <div className="site-card flex flex-col items-start p-6 sm:p-8">
               <CalendarDays className="h-8 w-8 text-[#2c7a5f]" aria-hidden="true" />
@@ -87,7 +119,7 @@ export const AppointmentSchedule: React.FC = () => {
               <p role={error ? 'alert' : 'status'} className={`mt-2 max-w-xl text-sm leading-relaxed ${error ? 'text-rose-800' : 'text-[#6b7280]'}`}>
                 {error || (loading
                   ? (isFilipino ? 'Nilo-load ang mga kumpirmadong appointment...' : 'Loading accepted appointments...')
-                  : (isFilipino ? 'Lalabas dito ang mga oras ng appointment kapag naaprubahan na ng clinic staff.' : 'Approved appointment times will appear here after clinic staff accept them.'))}
+                    : (isFilipino ? 'Lalabas dito ang mga kumpirmadong oras ng appointment.' : 'Confirmed appointment times will appear here.'))}
               </p>
             </div>
             <aside className="site-card p-5 sm:p-6">
@@ -101,22 +133,25 @@ export const AppointmentSchedule: React.FC = () => {
         ) : (
           <>
             <div className="grid gap-4 sm:grid-cols-2 xl:grid-cols-3">
-              {dates.flatMap((date) => appointmentsByDate[date]
-                .slice()
-                .sort((first, second) => (timeOrder[first.time] ?? 99) - (timeOrder[second.time] ?? 99))
-                .map((slot) => (
-                  <article key={`${date}-${slot.time}`} className="site-card p-5 transition-colors hover:border-[#9bbdad]">
-                    <p className="text-[11px] font-bold uppercase tracking-wide text-[#2c7a5f]">{date}</p>
-                    <h3 className="mt-1 text-sm font-bold text-[#0f4d3c]">{dateLabel(date)}</h3>
+              {displaySlots.map((slot) => (
+                  <article key={`${slot.date}-${slot.time}-${slot.priority ? 'priority' : 'regular'}`} className={`site-card p-5 transition-colors hover:border-[#9bbdad] ${slot.priority ? 'border-amber-300 bg-amber-50/50' : ''}`}>
+                    <p className="text-[11px] font-bold uppercase tracking-wide text-[#2c7a5f]">{slot.date}</p>
+                    <h3 className="mt-1 text-sm font-bold text-[#0f4d3c]">{dateLabel(slot.date)}</h3>
+                    {slot.priority && <p className="mt-2 text-xs font-bold uppercase tracking-wide text-amber-800">{isFilipino ? 'Appointment na may prayoridad' : 'Priority appointment'}</p>}
                     <div className="mt-5 flex items-center gap-2 border-t border-[#e7eee9] pt-4">
                       <Clock3 className="h-5 w-5 shrink-0 text-[#2c7a5f]" />
-                      <span className="text-base font-bold text-[#0f4d3c]">{timeLabels[slot.time] ?? slot.time}</span>
+                      <span className="text-base font-bold text-[#0f4d3c]">{timeLabels[slot.time] ?? formatAppointmentTime(slot.time)}</span>
                     </div>
+                    {slot.services && slot.services.length > 0 && (
+                      <p className="mt-3 text-xs leading-relaxed text-[#52635b]">
+                        <strong>{isFilipino ? 'Serbisyo:' : 'Services:'}</strong> {slot.services.map((service) => service.name).join(', ')}
+                      </p>
+                    )}
                     <p className="mt-3 text-sm text-[#6b7280]">
                       <strong className="text-[#374151]">{slot.bookedCount}</strong> {isFilipino ? 'appointment na naaprubahan' : `accepted ${slot.bookedCount === 1 ? 'appointment' : 'appointments'}`}
                     </p>
                   </article>
-                )))}
+              ))}
             </div>
             <div className="mt-5 flex flex-wrap items-start gap-x-8 gap-y-3 border-t border-[#dce7e1] pt-4 text-xs text-[#6b7280]">
               <span className="flex items-start gap-2"><Clock3 className="mt-0.5 h-4 w-4 text-[#2c7a5f]" />{isFilipino ? settings.clinicHoursFil : settings.clinicHours}</span>

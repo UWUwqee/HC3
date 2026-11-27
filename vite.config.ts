@@ -64,7 +64,7 @@ function appointmentsApiDevPlugin(): Plugin {
       server.middlewares.use('/api/appointments', createApiMiddleware('/api/appointments.ts'));
       server.middlewares.use('/api/content-image', createApiMiddleware('/api/content-image.ts'));
       server.middlewares.use('/api/content', createApiMiddleware('/api/content.ts'));
-      server.middlewares.use('/api/reminders', createApiMiddleware('/api/reminders.ts'));
+      server.middlewares.use('/api/website-assistant', createApiMiddleware('/api/website-assistant.ts'));
     },
   };
 }
@@ -76,6 +76,9 @@ export default defineConfig(() => {
       alias: {
         '@': path.resolve(__dirname, '.'),
       },
+    },
+    build: {
+      sourcemap: false,
     },
     server: {
       // HMR is disabled in AI Studio via DISABLE_HMR env var.

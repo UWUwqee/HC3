@@ -73,6 +73,24 @@ export const MASIKAP_SERVICES = [
     requirements: [],
     requirementsFil: [],
   },
+  {
+    id: 'animal_bite',
+    category: 'animal_bite',
+    title: 'Animal bite care',
+    titleFil: 'Pangangalaga sa kagat ng hayop',
+    shortDesc: 'Care for animal bite concerns. Contact the health center for current service information.',
+    shortDescFil: 'Pangangalaga para sa kagat ng hayop. Makipag-ugnayan sa health center para sa kasalukuyang impormasyon.',
+    fullDesc: 'Care for animal bite concerns. Contact the health center for current service information and requirements.',
+    fullDescFil: 'Pangangalaga para sa kagat ng hayop. Makipag-ugnayan sa health center para sa kasalukuyang impormasyon at mga kailangan.',
+    schedule: '',
+    scheduleFil: '',
+    location: CLINIC_ADDRESS,
+    badge: '',
+    badgeFil: '',
+    keyPersonnel: [],
+    requirements: [],
+    requirementsFil: [],
+  },
 ] as const;
 
 export const COVERAGE_AREAS = [

@@ -53,6 +53,7 @@ export const AdminReports: React.FC<{ appointments: ReportAppointment[] }> = ({ 
   const pendingCount = filtered.filter((item) => item.status === 'pending').length;
   const acceptedCount = filtered.filter((item) => item.status === 'confirmed').length;
   const completedCount = filtered.filter((item) => item.status === 'completed').length;
+  const missedCount = filtered.filter((item) => item.status === 'missed').length;
 
   return (
     <section className="space-y-4">
@@ -64,7 +65,7 @@ export const AdminReports: React.FC<{ appointments: ReportAppointment[] }> = ({ 
         <div className="mt-4 grid gap-3 sm:grid-cols-2 xl:grid-cols-4">
           <label className="text-xs font-semibold text-[#66736f]">Appointment from<input type="date" value={fromDate} max={toDate || undefined} onChange={(event) => setFromDate(event.target.value)} className="mt-1 block min-h-11 w-full border border-[#d9e1dc] px-3 text-sm text-[#17312e]" /></label>
           <label className="text-xs font-semibold text-[#66736f]">Appointment to<input type="date" value={toDate} min={fromDate || undefined} onChange={(event) => setToDate(event.target.value)} className="mt-1 block min-h-11 w-full border border-[#d9e1dc] px-3 text-sm text-[#17312e]" /></label>
-          <label className="text-xs font-semibold text-[#66736f]">Status<select value={status} onChange={(event) => setStatus(event.target.value)} className="mt-1 block min-h-11 w-full border border-[#d9e1dc] bg-white px-3 text-sm text-[#17312e]"><option value="all">All statuses</option><option value="pending">Pending</option><option value="confirmed">Accepted</option><option value="completed">Completed</option><option value="rejected">Rejected</option><option value="cancelled">Cancelled</option></select></label>
+          <label className="text-xs font-semibold text-[#66736f]">Status<select value={status} onChange={(event) => setStatus(event.target.value)} className="mt-1 block min-h-11 w-full border border-[#d9e1dc] bg-white px-3 text-sm text-[#17312e]"><option value="all">All statuses</option><option value="pending">Pending</option><option value="confirmed">Accepted</option><option value="completed">Completed</option><option value="missed">Missed</option><option value="rejected">Rejected</option><option value="cancelled">Cancelled</option></select></label>
           <label className="text-xs font-semibold text-[#66736f]">Service<select value={service} onChange={(event) => setService(event.target.value)} className="mt-1 block min-h-11 w-full border border-[#d9e1dc] bg-white px-3 text-sm text-[#17312e]"><option value="all">All services</option>{services.map((name) => <option key={name}>{name}</option>)}</select></label>
         </div>
       </div>
@@ -75,6 +76,7 @@ export const AdminReports: React.FC<{ appointments: ReportAppointment[] }> = ({ 
           ['Awaiting review', pendingCount],
           ['Accepted', acceptedCount],
           ['Completed', completedCount],
+          ['Missed', missedCount],
         ].map(([label, value]) => (
           <div key={String(label)} className="rounded-md border border-[#dce7e1] bg-white p-3 shadow-sm sm:p-4"><div className="text-2xl font-bold">{value}</div><div className="mt-1 text-xs text-[#66736f]">{label}</div></div>
         ))}

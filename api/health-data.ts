@@ -2,6 +2,7 @@ import 'dotenv/config';
 import { createClient } from '@libsql/client';
 import { randomUUID } from 'node:crypto';
 import type { IncomingMessage, ServerResponse } from 'node:http';
+import { verifyToken } from '@clerk/backend';
 
 type ApiRequest = IncomingMessage & { body?: unknown };
 type ApiResponse = ServerResponse & {
@@ -97,6 +98,21 @@ async function initializeDatabase(db: ReturnType<typeof createClient>) {
 
 export default async function handler(request: ApiRequest, response: ApiResponse) {
   response.setHeader('Cache-Control', 'no-store');
+  const authorization = request.headers.authorization;
+  const token = typeof authorization === 'string' && authorization.startsWith('Bearer ')
+    ? authorization.slice(7)
+    : '';
+  if (!token) return response.status(401).json({ error: 'Authentication is required.' });
+  const secretKey = process.env.CLERK_SECRET_KEY;
+  if (!secretKey) return response.status(503).json({ error: 'Clerk authentication is not configured.' });
+  let decoded: Awaited<ReturnType<typeof verifyToken>>;
+  try {
+    decoded = await verifyToken(token, { secretKey });
+  } catch (error) {
+    console.error('Health data Clerk session verification failed:', error);
+    return response.status(401).json({ error: 'Your Clerk sign-in could not be verified. Please sign in again.' });
+  }
+
   const db = getDatabase();
   if (!db) return response.status(503).json({ error: 'Turso database is not configured.' });
 
@@ -106,8 +122,7 @@ export default async function handler(request: ApiRequest, response: ApiResponse
     return response.status(500).json({ error: 'Database initialization failed.' });
   }
 
-  const ownerUid = text(request.headers['x-user-id'], 128);
-  if (!ownerUid) return response.status(401).json({ error: 'Firebase user ID is required.' });
+  const ownerUid = decoded.sub;
 
   if (request.method === 'GET') {
     const resource = text(request.headers['x-resource'], 40);
