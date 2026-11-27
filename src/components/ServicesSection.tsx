@@ -6,6 +6,7 @@ import checkupImage from '../assets/images/CHECK UP.jpg';
 import familyPlanningImage from '../assets/images/FAMILYPLANNING.jpg';
 import maternityImage from '../assets/images/MATERNITY.png';
 import vaccinationImage from '../assets/images/VACCINATION.jpg';
+import animalBiteImage from '../assets/images/animal bite.jpg';
 
 const services = [
   {
@@ -39,6 +40,14 @@ const services = [
     titleFil: 'Bakuna',
     image: vaccinationImage,
     imageAlt: 'Vaccination service illustration',
+  },
+  {
+    id: 'animal-bite',
+    category: 'animal_bite',
+    title: 'Animal bite care',
+    titleFil: 'Pangangalaga sa kagat ng hayop',
+    image: animalBiteImage,
+    imageAlt: "A dog biting a person's hand",
   },
 ];
 
