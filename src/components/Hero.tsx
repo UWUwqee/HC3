@@ -5,16 +5,10 @@ import { CLINIC_ADDRESS } from '../data/masikapClinicInfo';
 import centerPhoto from '../assets/images/MASIKAP.png';
 
 export const Hero: React.FC = () => {
-  const { language, setActiveSection, setBookingModalOpen, clinicOpen, clinicStatusError, appointmentRequestAvailability, siteContent } = useHealthCenter();
+  const { language, setActiveSection, setBookingModalOpen, appointmentRequestAvailability, siteContent } = useHealthCenter();
+  const clinicAddress = language === 'fil' ? siteContent.settings.clinicAddressFil : siteContent.settings.clinicAddress;
   const clinicHours = language === 'fil' ? siteContent.settings.clinicHoursFil : siteContent.settings.clinicHours;
   const bookingEnabled = appointmentRequestAvailability === 'available';
-  const supportPhones = siteContent.settings.contactPhone.split(/\s+(?:and|or)\s+|\/|,/i).map((phone) => phone.trim()).filter(Boolean).slice(0, 2);
-  const phoneLink = (phone: string) => {
-    const digits = phone.replace(/\D/g, '');
-    if (digits.startsWith('0')) return `+63${digits.slice(1)}`;
-    if (digits.startsWith('63')) return `+${digits}`;
-    return `+63${digits}`;
-  };
 
   const handleScrollTo = (id: string) => {
     setActiveSection(id);
@@ -23,53 +17,30 @@ export const Hero: React.FC = () => {
 
   return (
     <section id="overview" className="hero-section-enter bg-[#0f4d3c] text-white">
-      <div className="relative min-h-[300px] sm:min-h-[340px] flex items-center overflow-hidden border-b border-white/10">
+      <div className="relative min-h-[300px] flex items-center overflow-hidden border-b border-white/10">
         <img src={centerPhoto} alt="Masikap Health Center exterior" className="absolute inset-0 h-full w-full object-cover object-center" />
         <div className="absolute inset-0 bg-[#0f4d3c]/88" />
-        <div className="relative w-full max-w-7xl mx-auto px-5 sm:px-8 lg:px-12 py-12 sm:py-14">
-          <div className="flex w-full flex-col gap-7 sm:flex-row sm:items-center sm:justify-between sm:gap-10">
-          <div className="max-w-2xl">
-            <h1 className="hero-enter max-w-xl text-3xl sm:text-4xl lg:text-[46px] font-bold leading-[1.08] text-white">
+        <div className="relative mx-auto w-full max-w-7xl px-5 py-14 sm:px-8 lg:px-12">
+          <div className="absolute right-5 top-4 flex items-center gap-1.5 rounded-md border border-emerald-200/50 bg-emerald-950/60 px-2.5 py-1.5 text-[10px] font-bold leading-tight text-white shadow-lg sm:right-8 sm:top-6 sm:gap-2 sm:px-3 sm:py-2 sm:text-xs lg:right-12" role="status">
+            <CalendarDays className="h-3.5 w-3.5 shrink-0 text-emerald-300 sm:h-4 sm:w-4" aria-hidden="true" />
+            {language === 'fil' ? 'ONLINE NA PAGHILING NG APPOINTMENT · 24/7' : 'ONLINE APPOINTMENT REQUESTS · 24/7'}
+          </div>
+          <div className="mx-auto max-w-3xl text-center lg:mx-0 lg:text-left">
+            <h1 className="hero-enter mx-auto max-w-3xl text-3xl font-bold leading-[1.08] text-white sm:text-4xl lg:mx-0 lg:text-[46px]">
               Masikap Health Center
             </h1>
-            <div className="hero-actions mt-7 flex flex-wrap gap-3">
-              {bookingEnabled && <button onClick={() => setBookingModalOpen(true)} title="Request an appointment" className="inline-flex items-center gap-2 bg-white text-[#0f4d3c] px-5 py-3 text-sm font-bold rounded-sm border border-white hover:bg-[#eaf3ee] transition-colors">
-                <CalendarDays className="w-4 h-4" /> REQUEST AN APPOINTMENT
+            <div className="hero-actions mt-7 grid grid-cols-1 gap-3 sm:flex">
+              {bookingEnabled && <button onClick={() => setBookingModalOpen(true)} title="Request an appointment" className="inline-flex min-h-12 w-full items-center justify-center gap-2 rounded-sm border border-white bg-white px-5 py-3 text-sm font-bold text-[#0f4d3c] transition-colors hover:bg-[#eaf3ee] sm:w-auto">
+                <CalendarDays className="h-4 w-4" /> REQUEST APPOINTMENT
               </button>}
-              <button onClick={() => handleScrollTo('services')} className="inline-flex items-center gap-2 px-5 py-3 text-sm font-semibold text-white border border-white/40 rounded-sm hover:border-white hover:bg-white/10 transition-colors">
-                View services <ArrowDown className="w-4 h-4" />
+              <button onClick={() => handleScrollTo('services')} className="inline-flex min-h-12 w-full items-center justify-center gap-2 rounded-sm border border-white/40 px-5 py-3 text-sm font-semibold text-white transition-colors hover:border-white hover:bg-white/10 sm:w-auto">
+                View services <ArrowDown className="h-4 w-4" />
               </button>
-              <div className="min-w-0 max-w-[290px] space-y-1.5 text-xs leading-relaxed text-white/85 sm:ml-2">
-                <p className="flex items-start gap-2"><MapPin className="mt-0.5 h-3.5 w-3.5 shrink-0" /><span>{CLINIC_ADDRESS}</span></p>
-                <p className="flex items-start gap-2"><Clock3 className="mt-0.5 h-3.5 w-3.5 shrink-0" /><span>{clinicHours}</span></p>
-              </div>
             </div>
-          </div>
-          <aside aria-label={language === 'fil' ? 'Suporta sa appointment' : 'Appointment support'} className="w-full max-w-sm border border-white/25 bg-emerald-950/35 p-4 text-left shadow-lg sm:shrink-0 sm:p-5">
-            <div className="flex items-center gap-2 text-sm font-bold text-white">
-              <PhoneCall className="h-4 w-4 text-emerald-200" aria-hidden="true" />
-              {language === 'fil' ? 'Kailangan ng tulong sa appointment?' : 'Need help booking?'}
+            <div className="mx-auto mt-5 max-w-2xl space-y-2 text-center text-sm leading-relaxed text-white/90 lg:mx-0 lg:text-left">
+              <p className="flex items-start justify-center gap-2 lg:justify-start"><MapPin className="mt-0.5 h-4 w-4 shrink-0" /><span>{clinicAddress || CLINIC_ADDRESS}</span></p>
+              <p className="flex items-start justify-center gap-2 lg:justify-start"><Clock3 className="mt-0.5 h-4 w-4 shrink-0" /><span>{clinicHours}</span></p>
             </div>
-            <p className="mt-2 text-xs leading-relaxed text-white/80">
-              {language === 'fil' ? 'Tumawag sa aming kawani para matulungan ka.' : 'Call our staff for help with your appointment.'}
-            </p>
-            <div className="mt-3 space-y-1 rounded bg-white px-3 py-2 text-[#0f4d3c]">
-              {supportPhones.map((phone) => (
-                <a key={phone} href={`tel:${phoneLink(phone)}`} className="flex min-h-9 items-center justify-center gap-2 text-sm font-bold hover:text-emerald-800">
-                  <PhoneCall className="h-4 w-4 shrink-0" aria-hidden="true" />
-                  {language === 'fil' ? 'Tumawag sa' : 'Call'} {phone}
-                </a>
-              ))}
-            </div>
-          </aside>
-          <div className={`flex min-h-24 min-w-56 items-center justify-center gap-4 self-end rounded-md border px-7 py-5 text-xl font-extrabold shadow-lg sm:min-h-28 sm:min-w-64 sm:self-center sm:px-9 sm:text-2xl ${clinicStatusError || clinicOpen === null ? 'border-slate-200/50 bg-slate-950/45' : clinicOpen ? 'border-emerald-200/50 bg-emerald-950/50' : 'border-rose-200/60 bg-rose-950/55'}`} role="status" aria-live="polite">
-            <span className={`h-4 w-4 shrink-0 rounded-full ring-4 ${clinicStatusError || clinicOpen === null ? 'bg-slate-400 ring-slate-300/20' : clinicOpen ? 'bg-emerald-400 ring-emerald-300/20' : 'bg-rose-400 ring-rose-300/20'}`} />
-            {clinicStatusError || clinicOpen === null
-              ? (language === 'fil' ? 'Hindi available ang status' : 'Status unavailable')
-              : clinicOpen
-                ? (language === 'fil' ? 'BUKAS NGAYON' : 'OPEN NOW')
-                : (language === 'fil' ? 'SARADO NGAYON' : 'CLOSED NOW')}
-          </div>
           </div>
         </div>
       </div>

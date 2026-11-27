@@ -214,7 +214,7 @@ export const AdminContentManager: React.FC = () => {
       loadingContent = true;
       try {
         const token = await getToken();
-        if (!token) throw new Error('Sign in as an administrator to manage website content.');
+        if (!token) return;
         const response = await fetch('/api/admin?mode=site_content', {
           headers: { Authorization: `Bearer ${token}` },
           cache: 'no-store',

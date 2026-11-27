@@ -1,4 +1,4 @@
-import { CLINIC_ADDRESS, MASIKAP_SERVICES } from './masikapClinicInfo';
+import { CLINIC_ADDRESS, MASIKAP_SERVICES } from './masikapClinicInfo.ts';
 import type { ClinicPublicSettings, NewsUpdate, OutreachProgram, ServiceDetail } from '../types';
 
 export const DEFAULT_CLINIC_PUBLIC_SETTINGS: ClinicPublicSettings = {
@@ -16,8 +16,8 @@ export const DEFAULT_CLINIC_PUBLIC_SETTINGS: ClinicPublicSettings = {
   contactEmail: '',
   emergencyPhone: '',
   emergencyPhoneFil: '',
-  holidayAdvisory: '',
-  holidayAdvisoryFil: '',
+  holidayAdvisory: 'Verify clinic operations before visiting on holidays.',
+  holidayAdvisoryFil: 'Tiyakin ang operasyon ng klinika bago bumisita tuwing holiday.',
 };
 
 export const SERVICES_DATA: ServiceDetail[] = MASIKAP_SERVICES.map((service) => ({

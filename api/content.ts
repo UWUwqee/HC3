@@ -1,6 +1,5 @@
 import type { IncomingMessage, ServerResponse } from 'node:http';
 import { getContentDatabase, readSiteContent } from './site-content-store.ts';
-import { DEFAULT_CLINIC_PUBLIC_SETTINGS, NEWS_UPDATES, OUTREACH_PROGRAMS, SERVICES_DATA } from '../src/data/healthCenterData.ts';
 
 type ApiRequest = IncomingMessage;
 type ApiResponse = ServerResponse & {
@@ -15,19 +14,12 @@ export default async function handler(request: ApiRequest, response: ApiResponse
     return response.status(405).json({ error: 'Method not allowed.' });
   }
   const db = getContentDatabase();
-  if (!db) {
-    return response.status(200).json({
-      services: SERVICES_DATA,
-      news: NEWS_UPDATES,
-      outreach: OUTREACH_PROGRAMS,
-      settings: { ...DEFAULT_CLINIC_PUBLIC_SETTINGS },
-    });
-  }
+  if (!db) return response.status(503).json({ error: 'Turso database is not configured.' });
   try {
     const { content } = await readSiteContent(db);
     return response.status(200).json(content);
   } catch (error) {
     console.error('Public site content could not be loaded:', error);
-    return response.status(500).json({ error: 'Public site content could not be loaded.' });
+    return response.status(503).json({ error: 'Public clinic information could not be loaded from Turso.' });
   }
 }

@@ -1,9 +1,9 @@
 import React, { FormEvent, useEffect, useMemo, useState } from 'react';
-import { useAuth, useClerk } from '@clerk/react';
-import { CalendarDays, Check, CheckCircle2, ChevronLeft, Clock3, LockKeyhole, MessageCircle, Search, Send, Trash2, X } from 'lucide-react';
+import { useAuth } from '@clerk/react';
+import { CalendarDays, Check, CheckCircle2, ChevronLeft, Clock3, LockKeyhole, MessageCircle, Search, Send, Trash2 } from 'lucide-react';
 import { AdminCalendar, SlotSetting, SlotSettingsForm } from './AdminCalendar';
 import { AdminContentManager } from './AdminContentManager';
-import { AdminReports } from './AdminReports';
+import { formatAppointmentTime, getAppointmentTimeMinutes, getAppointmentTimePeriod } from '../appointmentSchedule';
 
 interface AppointmentRow {
   id: string;
@@ -12,20 +12,58 @@ interface AppointmentRow {
   patient_name: string;
   phone: string;
   email: string;
+  address: string | null;
+  chief_complaint: string | null;
+  age: number | null;
+  priority_categories: string;
+  attendance_consent: number;
   zone: string;
-  address?: string | null;
-  chief_complaint?: string | null;
-  age?: number | null;
   guardian_name?: string | null;
   guardian_relationship?: string | null;
-  priority_categories?: string;
   service_name: string;
   preferred_date: string;
   preferred_time: string;
   status: string;
   chat_status: string;
   created_at: string;
-  missed_at?: string | null;
+  completed_at: string | null;
+}
+
+const priorityCategoryLabels = {
+  pwd: 'Person with disability (PWD)',
+  senior_citizen: 'Senior citizen',
+  pregnant_lactating: 'Pregnant or lactating',
+};
+
+function getPriorityCategoryLabels(value: string) {
+  return value.split(',')
+    .filter((category): category is keyof typeof priorityCategoryLabels => (
+      Object.prototype.hasOwnProperty.call(priorityCategoryLabels, category)
+    ))
+    .map((category) => priorityCategoryLabels[category]);
+}
+
+function csvCell(value: string) {
+  const safeValue = /^[\s]*[=+\-@]/.test(value) ? `'${value}` : value;
+  return `"${safeValue.replaceAll('"', '""')}"`;
+}
+
+function exportCompletedAppointments(appointments: AppointmentRow[]) {
+  const columns: Array<keyof AppointmentRow> = [
+    'reference_code', 'patient_name', 'phone', 'email', 'address', 'chief_complaint', 'age', 'priority_categories',
+    'zone', 'service_name', 'preferred_date', 'preferred_time', 'status', 'created_at', 'completed_at',
+  ];
+  const rows = [
+    columns.map((column) => csvCell(column.replaceAll('_', ' '))).join(','),
+    ...appointments.map((appointment) => columns.map((column) => csvCell(String(appointment[column] ?? ''))).join(',')),
+  ];
+  const blob = new Blob([`\uFEFF${rows.join('\r\n')}`], { type: 'text/csv;charset=utf-8' });
+  const url = URL.createObjectURL(blob);
+  const link = document.createElement('a');
+  link.href = url;
+  link.download = `masikap-completed-appointments-${new Date().toISOString().slice(0, 10)}.csv`;
+  link.click();
+  URL.revokeObjectURL(url);
 }
 
 interface ChatMessage {
@@ -39,44 +77,32 @@ interface ChatMessage {
 }
 
 export const AdminPanel: React.FC = () => {
-  const { getToken } = useAuth();
-  const { signOut } = useClerk();
+  const { getToken, signOut } = useAuth();
   const [appointments, setAppointments] = useState<AppointmentRow[]>([]);
   const [messages, setMessages] = useState<ChatMessage[]>([]);
   const [slotSettings, setSlotSettings] = useState<SlotSetting[]>([]);
-  const [activeTab, setActiveTab] = useState<'requests' | 'missed' | 'calendar' | 'content' | 'reports'>('requests');
+  const [activeTab, setActiveTab] = useState<'requests' | 'priority' | 'completed' | 'calendar' | 'content'>('requests');
   const [selectedId, setSelectedId] = useState<string>('');
   const [statusFilter, setStatusFilter] = useState('all');
+  const [appointmentDateFilter, setAppointmentDateFilter] = useState('');
+  const [priorityOnly, setPriorityOnly] = useState(false);
   const [search, setSearch] = useState('');
   const [chatInput, setChatInput] = useState('');
   const [loading, setLoading] = useState(true);
-  const [clinicOpen, setClinicOpen] = useState<boolean | null>(null);
-  const [clinicStatusSaving, setClinicStatusSaving] = useState(false);
   const [error, setError] = useState('');
 
   const loadWorkspace = async () => {
     try {
       const token = await getToken();
-      if (!token) throw new Error('Your Clerk session could not be loaded. Please sign in again.');
+      if (!token) return;
       const response = await fetch('/api/admin', { headers: { Authorization: `Bearer ${token}` } });
       if (!response.ok) throw new Error(response.status === 403 ? 'This account is not an admin.' : 'Admin workspace could not be loaded.');
       const data = await response.json() as { role: string; appointments: AppointmentRow[]; messages: ChatMessage[]; slotSettings?: SlotSetting[] };
       if (data.role !== 'admin') throw new Error('This account is not an admin.');
-      setAppointments(data.appointments.slice().sort((first, second) =>
+      setAppointments(data.appointments.filter((appointment) => appointment.status !== 'rejected').sort((first, second) =>
         second.created_at.localeCompare(first.created_at) || second.id.localeCompare(first.id)));
       setMessages(data.messages);
       setSlotSettings(data.slotSettings ?? []);
-      const statusToken = await getToken();
-      if (!statusToken) throw new Error('Your Clerk session could not be loaded. Please sign in again.');
-      const statusResponse = await fetch('/api/admin?mode=clinic_status', {
-        headers: { Authorization: `Bearer ${statusToken}` },
-        cache: 'no-store',
-      });
-      const statusData = await statusResponse.json() as { clinicOpen?: boolean; error?: string };
-      if (!statusResponse.ok || typeof statusData.clinicOpen !== 'boolean') {
-        throw new Error(statusData.error || 'Clinic status could not be loaded.');
-      }
-      setClinicOpen(statusData.clinicOpen);
       setError('');
     } catch (caught) {
       setError(caught instanceof Error ? caught.message : 'Admin workspace could not be loaded.');
@@ -96,54 +122,62 @@ export const AdminPanel: React.FC = () => {
   const counts = useMemo(() => ({
     pending: appointments.filter((appointment) => appointment.status === 'pending').length,
     confirmed: appointments.filter((appointment) => appointment.status === 'confirmed').length,
-    rejected: appointments.filter((appointment) => appointment.status === 'rejected' || appointment.status === 'cancelled').length,
-    missed: appointments.filter((appointment) => appointment.status === 'missed').length,
+    completed: appointments.filter((appointment) => appointment.status === 'completed').length,
+    priority: appointments.filter((appointment) => appointment.status !== 'completed'
+      && getPriorityCategoryLabels(appointment.priority_categories ?? '').length > 0).length,
   }), [appointments]);
   const filteredAppointments = useMemo(() => {
     const query = search.trim().toLowerCase();
     return appointments.filter((appointment) => {
-      const matchesStatus = activeTab === 'missed'
-        || statusFilter === 'all'
-        || (statusFilter === 'rejected' ? ['rejected', 'cancelled'].includes(appointment.status) : appointment.status === statusFilter);
-      const matchesTab = activeTab === 'missed'
-        ? appointment.status === 'missed'
-        : appointment.status !== 'missed';
+      const matchesStatus = activeTab === 'completed'
+        ? appointment.status === 'completed'
+        : activeTab === 'priority'
+          ? appointment.status !== 'completed' && getPriorityCategoryLabels(appointment.priority_categories ?? '').length > 0
+          : statusFilter === 'all'
+            || (statusFilter === 'history' ? appointment.status === 'cancelled' : appointment.status === statusFilter);
+      const matchesDate = !appointmentDateFilter || appointment.preferred_date === appointmentDateFilter;
+      const matchesPriority = !priorityOnly || getPriorityCategoryLabels(appointment.priority_categories ?? '').length > 0;
       const matchesSearch = !query || [
         appointment.patient_name,
         appointment.reference_code,
         appointment.service_name,
         appointment.phone,
-      ].some((value) => value.toLowerCase().includes(query));
-      return matchesTab && matchesStatus && matchesSearch;
-    });
-  }, [activeTab, appointments, search, statusFilter]);
+        appointment.address ?? '',
+        appointment.chief_complaint ?? '',
+        String(appointment.age ?? ''),
+        getPriorityCategoryLabels(appointment.priority_categories ?? '').join(' '),
+      ].some((value) => String(value ?? '').toLowerCase().includes(query));
+      return matchesStatus && matchesDate && matchesPriority && matchesSearch;
+    }).sort((left, right) => left.preferred_date.localeCompare(right.preferred_date)
+      || (getAppointmentTimeMinutes(left.preferred_time) ?? Number.POSITIVE_INFINITY)
+        - (getAppointmentTimeMinutes(right.preferred_time) ?? Number.POSITIVE_INFINITY)
+      || left.created_at.localeCompare(right.created_at));
+  }, [activeTab, appointmentDateFilter, appointments, priorityOnly, search, statusFilter]);
+
+  useEffect(() => {
+    if (selectedId && !filteredAppointments.some((appointment) => appointment.id === selectedId)) {
+      setSelectedId('');
+    }
+  }, [filteredAppointments, selectedId]);
 
   const performAction = async (action: string, appointment: AppointmentRow) => {
     if (action === 'delete_chat' && !window.confirm('Archive this conversation for the patient? Messages will remain available in admin records, and the appointment request will be kept.')) return;
-    if (action === 'delete_appointment' && !window.confirm(`Permanently delete the appointment request for ${appointment.patient_name} (${appointment.reference_code}) and its messages? This cannot be undone.`)) return;
-    if (action === 'complete' && !window.confirm('Mark this appointment as completed? It will be removed from the public Dates and Time Slots schedule but remain in admin records.')) return;
-    if (action === 'missed' && !window.confirm('Mark this appointment as missed? The chat will close and the patient will be able to request another appointment.')) return;
+    if (action === 'complete' && !window.confirm('Mark this appointment as completed? The patient chat will close, and the request will move to Completed records.')) return;
     if (action === 'approve') {
       const dateSettings = slotSettings.filter((setting) => setting.appointment_date === appointment.preferred_date);
       const fullDateBlocked = dateSettings.some((setting) => setting.time_slot === 'all_day' && Number(setting.blocked) === 1);
-      const slotSetting = dateSettings.find((setting) => setting.time_slot === appointment.preferred_time);
-      const slotBlocked = Number(slotSetting?.blocked) === 1;
-      const acceptedCount = appointments.filter((item) => item.status === 'confirmed'
-        && item.preferred_date === appointment.preferred_date
-        && item.preferred_time === appointment.preferred_time).length;
-      const slotCapacity = Number(slotSetting?.capacity ?? 0);
+      const period = getAppointmentTimePeriod(appointment.preferred_time);
+      const exactSetting = dateSettings.find((setting) => setting.time_slot === appointment.preferred_time);
+      const periodSetting = dateSettings.find((setting) => setting.time_slot === period);
+      const slotBlocked = Number(exactSetting?.blocked) === 1 || Number(periodSetting?.blocked) === 1;
       if (fullDateBlocked || slotBlocked) {
         setError('This appointment date or time slot is blocked. Unblock it in Calendar & availability before accepting.');
-        return;
-      }
-      if (slotCapacity > 0 && acceptedCount >= slotCapacity) {
-        setError('This time slot has reached its appointment limit. Increase the capacity in Calendar & availability before accepting.');
         return;
       }
     }
     try {
       const token = await getToken();
-      if (!token) throw new Error('Your Clerk session could not be loaded. Please sign in again.');
+      if (!token) return;
       const response = await fetch('/api/admin', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${token}` },
@@ -158,39 +192,9 @@ export const AdminPanel: React.FC = () => {
         setMessages((current) => current.filter((message) => message.appointment_id !== appointment.id));
         setChatInput('');
       }
-      if (action === 'delete_appointment') {
-        setAppointments((current) => current.filter((item) => item.id !== appointment.id));
-        setMessages((current) => current.filter((message) => message.appointment_id !== appointment.id));
-        setSelectedId('');
-        setChatInput('');
-      }
-      if (action === 'missed') setActiveTab('missed');
       await loadWorkspace();
     } catch (caught) {
       setError(caught instanceof Error ? caught.message : 'The action could not be completed.');
-    }
-  };
-
-  const updateClinicStatus = async (isOpen: boolean) => {
-    setClinicStatusSaving(true);
-    try {
-      const token = await getToken();
-      if (!token) throw new Error('Sign in to update clinic status.');
-      const response = await fetch('/api/admin', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${token}` },
-        body: JSON.stringify({ action: 'set_clinic_status', isOpen }),
-      });
-      const result = await response.json() as { clinicOpen?: boolean; error?: string };
-      if (!response.ok || typeof result.clinicOpen !== 'boolean') {
-        throw new Error(result.error || 'Clinic status could not be updated.');
-      }
-      setClinicOpen(result.clinicOpen);
-      setError('');
-    } catch (caught) {
-      setError(caught instanceof Error ? caught.message : 'Clinic status could not be updated.');
-    } finally {
-      setClinicStatusSaving(false);
     }
   };
 
@@ -218,7 +222,7 @@ export const AdminPanel: React.FC = () => {
     if (!selected || !chatInput.trim()) return;
     try {
       const token = await getToken();
-      if (!token) throw new Error('Your Clerk session could not be loaded. Please sign in again.');
+      if (!token) return;
       const response = await fetch('/api/admin', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${token}` },
@@ -245,22 +249,14 @@ export const AdminPanel: React.FC = () => {
 
       <div className="mx-auto w-full max-w-[1500px] px-4 py-5 sm:px-8 sm:py-8">
         <div className="mb-6 flex flex-col justify-between gap-4 sm:flex-row sm:items-center">
-          <div><p className="text-sm font-medium text-[#52635b]">Review appointment requests, contact patients, and manage confirmations.</p><p className="mt-1 text-xs text-[#7b8982]">Changes sync with the public website automatically.</p></div>
-          <div className="flex min-w-0 flex-wrap items-center gap-3 rounded-md border border-[#dce7e1] bg-white px-4 py-3 shadow-sm sm:gap-4">
-            <span className={`h-3 w-3 shrink-0 rounded-full ring-4 ${clinicOpen === null ? 'bg-slate-400 ring-slate-100' : clinicOpen ? 'bg-emerald-600 ring-emerald-100' : 'bg-rose-600 ring-rose-100'}`} />
-            <div className="mr-auto min-w-0 sm:mr-2"><div className="text-xs font-bold tracking-wide">{clinicOpen === null ? 'LOADING STATUS' : clinicOpen ? 'OPEN NOW' : 'CLOSED NOW'}</div><div className="text-[10px] text-[#7b8982]">Live public website status</div></div>
-            <button type="button" disabled={clinicStatusSaving || clinicOpen === null} onClick={() => void updateClinicStatus(!clinicOpen)} className={`min-h-11 shrink-0 rounded-sm px-4 text-xs font-bold text-white disabled:opacity-60 ${clinicOpen ? 'bg-rose-700 hover:bg-rose-800' : 'bg-[#0f4d3c] hover:bg-[#2c7a5f]'}`}>
-              {clinicStatusSaving ? 'Saving...' : clinicOpen === null ? 'Loading...' : clinicOpen ? 'CLOSE NOW' : 'OPEN NOW'}
-            </button>
-          </div>
+          <div><p className="text-sm font-medium text-[#52635b]">Review appointment requests, contact patients, and manage confirmations.</p><p className="mt-1 text-xs text-[#7b8982]">Online requests are available 24/7. Appointment times run 9:00 AM–2:00 PM in half-hour intervals.</p></div>
         </div>
 
         <section aria-label="Appointment summary" className="mb-6 grid grid-cols-2 gap-3 sm:grid-cols-4">
           {[
             { label: 'Awaiting review', value: counts.pending, icon: Clock3, color: 'text-amber-800', bg: 'bg-amber-50', border: 'border-l-amber-400' },
             { label: 'Accepted', value: counts.confirmed, icon: Check, color: 'text-emerald-800', bg: 'bg-emerald-50', border: 'border-l-emerald-500' },
-            { label: 'Rejected or cancelled', value: counts.rejected, icon: X, color: 'text-rose-800', bg: 'bg-rose-50', border: 'border-l-rose-500' },
-            { label: 'Missed', value: counts.missed, icon: Clock3, color: 'text-rose-800', bg: 'bg-rose-50', border: 'border-l-rose-500' },
+            { label: 'Completed', value: counts.completed, icon: CheckCircle2, color: 'text-sky-800', bg: 'bg-sky-50', border: 'border-l-sky-500' },
           ].map(({ label, value, icon: Icon, color, bg, border }) => (
             <div key={label} className={`flex min-w-0 items-center gap-2 border border-[#dce7e1] border-l-4 bg-white p-3 shadow-sm sm:gap-4 sm:p-4 ${border}`}>
               <div className={`flex h-9 w-9 shrink-0 items-center justify-center ${bg} ${color} sm:h-10 sm:w-10`}><Icon className="h-5 w-5" /></div>
@@ -272,12 +268,12 @@ export const AdminPanel: React.FC = () => {
         <nav aria-label="Admin sections" className="mb-5 flex gap-1 overflow-x-auto rounded-md border border-[#dce7e1] bg-white p-1 shadow-sm">
           {[
             { id: 'requests', label: 'Appointment requests' },
-            { id: 'missed', label: `Missed appointments (${counts.missed})` },
+            { id: 'priority', label: `Priority appointments (${counts.priority})` },
+            { id: 'completed', label: `Completed records (${counts.completed})` },
             { id: 'calendar', label: 'Calendar & availability' },
             { id: 'content', label: 'Website content' },
-            { id: 'reports', label: 'Reports & export' },
           ].map(({ id, label }) => (
-            <button key={id} type="button" onClick={() => { setActiveTab(id as 'requests' | 'missed' | 'calendar' | 'content' | 'reports'); setSelectedId(''); }} className={`min-h-11 shrink-0 whitespace-nowrap rounded-sm px-3 py-2.5 text-xs font-bold sm:px-4 sm:text-sm ${activeTab === id ? 'bg-[#0f4d3c] text-white' : 'text-[#66736f] hover:bg-[#f2f7f4] hover:text-[#0f4d3c]'}`}>{label}</button>
+            <button key={id} type="button" onClick={() => { setActiveTab(id as typeof activeTab); setSelectedId(''); }} className={`min-h-11 min-w-max flex-1 rounded-sm px-3 py-2.5 text-center text-xs font-bold sm:min-w-0 sm:px-4 sm:text-sm ${activeTab === id ? 'bg-[#0f4d3c] text-white' : 'text-[#66736f] hover:bg-[#f2f7f4] hover:text-[#0f4d3c]'}`}>{label}</button>
           ))}
         </nav>
 
@@ -287,41 +283,61 @@ export const AdminPanel: React.FC = () => {
             appointments={appointments}
             slotSettings={slotSettings}
             onSaveSettings={saveSlotSettings}
-            onSelectAppointment={(id) => { setSelectedId(id); setActiveTab('requests'); }}
+            onSelectAppointment={(id) => {
+              setStatusFilter('all');
+              setAppointmentDateFilter('');
+              setPriorityOnly(false);
+              setSearch('');
+              setSelectedId(id);
+              setActiveTab('requests');
+            }}
           />
         ) : activeTab === 'content' ? (
           <AdminContentManager />
-        ) : activeTab === 'reports' ? (
-          <AdminReports appointments={appointments} />
         ) : (
         <section className="grid min-w-0 overflow-hidden rounded-md border border-[#dce7e1] bg-white shadow-sm lg:min-h-[640px] lg:grid-cols-[350px_minmax(0,1fr)]">
           <aside className={`${selected ? 'hidden lg:block' : ''} min-w-0 border-b border-[#dce7e1] lg:border-b-0 lg:border-r`}>
             <div className="border-b border-[#edf1ee] p-4">
-              <div className="mb-3 flex items-center justify-between"><h2 className="text-sm font-bold">Appointment requests</h2><span className="text-xs text-[#66736f]">{filteredAppointments.length} shown</span></div>
+              <div className="mb-3 flex items-center justify-between gap-2"><h2 className="text-sm font-bold">{activeTab === 'completed' ? 'Completed records' : activeTab === 'priority' ? 'Priority appointments' : 'Appointment requests'}</h2><span className="text-xs text-[#66736f]">{filteredAppointments.length} shown</span></div>
+              {activeTab === 'completed' && (
+                <div className="mb-3 flex flex-wrap items-center justify-between gap-2">
+                  <p className="text-xs leading-relaxed text-[#66736f]">Completed requests are archived here and removed from the appointment request and priority lists.</p>
+                  <button type="button" onClick={() => exportCompletedAppointments(filteredAppointments)} disabled={filteredAppointments.length === 0} className="min-h-11 rounded-sm bg-[#17645c] px-4 text-xs font-bold text-white hover:bg-[#104f49] disabled:cursor-not-allowed disabled:opacity-50">Export completed records ({filteredAppointments.length})</button>
+                </div>
+              )}
+              {activeTab === 'priority' && <p className="mb-3 text-xs leading-relaxed text-[#66736f]">Requests marked PWD, senior citizen, or pregnant/lactating are listed here for staff attention.</p>}
               <label className="flex h-10 items-center gap-2 border border-[#d9e1dc] px-3 text-[#66736f] focus-within:border-[#17645c]">
                 <Search className="h-4 w-4 shrink-0" />
                 <input value={search} onChange={(event) => setSearch(event.target.value)} placeholder="Search patient or reference" className="min-w-0 flex-1 text-xs text-[#17312e] outline-none" />
               </label>
-              <div className="mt-3 flex gap-1 overflow-x-auto pb-1">
+              {activeTab === 'requests' && <div className="mt-3 flex gap-1 overflow-x-auto pb-1">
                 {[
                   ['all', 'All'],
-                  ['pending', 'Pending'],
                   ['confirmed', 'Accepted'],
-                  ['completed', 'Completed'],
-                  ['rejected', 'Rejected'],
+                  ['history', 'Cancelled'],
                 ].map(([value, label]) => (
                   <button key={value} type="button" onClick={() => setStatusFilter(value)} className={`min-h-11 shrink-0 whitespace-nowrap px-3 text-xs font-bold ${statusFilter === value ? 'bg-[#173a37] text-white' : 'bg-[#f1f4f1] text-[#66736f] hover:bg-[#e7ede8]'}`}>{label}</button>
                 ))}
-              </div>
+                <button type="button" aria-pressed={priorityOnly} onClick={() => setPriorityOnly((current) => !current)} className={`min-h-11 shrink-0 whitespace-nowrap px-3 text-xs font-bold ${priorityOnly ? 'bg-[#173a37] text-white' : 'bg-[#f1f4f1] text-[#66736f] hover:bg-[#e7ede8]'}`}>Priority only</button>
+              </div>}
+              <label className="mt-2 block text-[11px] font-semibold text-[#66736f]">Appointment date
+                <input type="date" value={appointmentDateFilter} onChange={(event) => setAppointmentDateFilter(event.target.value)} className="mt-1 block min-h-10 w-full border border-[#d9e1dc] bg-white px-3 text-xs text-[#17312e]" />
+              </label>
+              {appointmentDateFilter && <button type="button" onClick={() => setAppointmentDateFilter('')} className="mt-1 min-h-9 text-xs font-semibold text-[#17645c] underline">Clear date filter</button>}
             </div>
             <div className="max-h-[420px] overflow-y-auto lg:max-h-[calc(100vh-360px)]">
               {loading ? <p className="p-5 text-sm text-[#66736f]">Loading requests...</p> : filteredAppointments.map((appointment) => (
                 <button key={appointment.id} type="button" onClick={() => setSelectedId(appointment.id)} className={`w-full border-b border-[#edf1ee] border-l-2 px-4 py-4 text-left transition-colors hover:bg-[#f5f8f5] ${selectedId === appointment.id ? 'border-l-[#17645c] bg-[#f0f5f1]' : 'border-l-transparent'}`}>
-                  <div className="flex items-start justify-between gap-3"><div className="min-w-0"><div className="truncate text-sm font-bold">{appointment.patient_name}</div><div className="mt-1 truncate text-xs text-[#66736f]">{appointment.service_name}</div></div><span className={`shrink-0 px-2 py-1 text-[10px] font-bold uppercase ${appointment.status === 'confirmed' ? 'bg-emerald-100 text-emerald-800' : appointment.status === 'completed' ? 'bg-sky-100 text-sky-800' : appointment.status === 'cancelled' || appointment.status === 'rejected' || appointment.status === 'missed' ? 'bg-rose-100 text-rose-800' : 'bg-amber-100 text-amber-800'}`}>{appointment.status}</span></div>
-                  <div className="mt-3 flex min-w-0 flex-wrap items-center justify-between gap-x-2 gap-y-1 text-[11px] text-[#66736f]"><span>{appointment.preferred_date} · {appointment.preferred_time}</span><span className="break-all font-mono">{appointment.reference_code}</span></div>
+                  <div className="flex items-start justify-between gap-3"><div className="min-w-0"><div className="truncate text-sm font-bold">{appointment.patient_name}</div><div className="mt-1 truncate text-xs text-[#66736f]">{appointment.service_name}</div></div><span className={`shrink-0 px-2 py-1 text-[10px] font-bold uppercase ${appointment.status === 'confirmed' ? 'bg-emerald-100 text-emerald-800' : appointment.status === 'completed' ? 'bg-sky-100 text-sky-800' : appointment.status === 'cancelled' || appointment.status === 'rejected' ? 'bg-rose-100 text-rose-800' : 'bg-amber-100 text-amber-800'}`}>{appointment.status}</span></div>
+                  <div className="mt-3 flex min-w-0 flex-wrap items-center justify-between gap-x-2 gap-y-1 text-[11px] text-[#66736f]"><span>{appointment.preferred_date} · {formatAppointmentTime(appointment.preferred_time)}</span><span className="break-all font-mono">{appointment.reference_code}</span></div>
+                  {getPriorityCategoryLabels(appointment.priority_categories ?? '').length > 0 && <p className="mt-2 text-[10px] font-semibold text-[#17645c]">{getPriorityCategoryLabels(appointment.priority_categories ?? '').join(' · ')}</p>}
                 </button>
               ))}
-              {!loading && filteredAppointments.length === 0 && <p className="p-5 text-sm text-[#66736f]">{activeTab === 'missed' ? 'No missed appointments yet.' : appointments.length ? 'No requests match these filters.' : 'No appointment requests yet.'}</p>}
+              {!loading && filteredAppointments.length === 0 && <p className="p-5 text-sm text-[#66736f]">{activeTab === 'completed'
+                ? (appointments.length ? 'No completed records match these filters.' : 'No completed records yet.')
+                : activeTab === 'priority'
+                  ? 'No priority appointments match these filters.'
+                  : (appointments.length ? 'No requests match these filters.' : 'No appointment requests yet.')}</p>}
             </div>
           </aside>
 
@@ -336,35 +352,31 @@ export const AdminPanel: React.FC = () => {
               <div className="grid min-h-0 xl:min-h-[640px] xl:grid-cols-[minmax(230px,0.7fr)_minmax(320px,1.3fr)]">
                 <div className="min-w-0 border-b border-[#dfe6e1] bg-white p-4 sm:p-5 xl:border-b-0 xl:border-r">
                   <button type="button" onClick={() => setSelectedId('')} className="mb-4 flex items-center gap-1 text-xs font-bold text-[#17645c] lg:hidden"><ChevronLeft className="h-4 w-4" />Back to requests</button>
-                  <div className="flex items-start justify-between gap-3"><div><div className="text-[11px] font-bold uppercase tracking-wide text-[#17645c]">{['completed', 'missed', 'cancelled'].includes(selected.status) ? 'Appointment history' : 'Request details'}</div><div className="mt-1 font-mono text-xs text-[#66736f]">{selected.reference_code}</div></div><span className={`px-2 py-1 text-[10px] font-bold uppercase ${selected.status === 'confirmed' ? 'bg-emerald-100 text-emerald-800' : selected.status === 'completed' ? 'bg-sky-100 text-sky-800' : selected.status === 'cancelled' || selected.status === 'rejected' || selected.status === 'missed' ? 'bg-rose-100 text-rose-800' : 'bg-amber-100 text-amber-800'}`}>{selected.status}</span></div>
+                  <div className="flex items-start justify-between gap-3"><div><div className="text-[11px] font-bold uppercase tracking-wide text-[#17645c]">{['completed', 'cancelled', 'rejected'].includes(selected.status) ? 'Appointment history' : 'Request details'}</div><div className="mt-1 font-mono text-xs text-[#66736f]">{selected.reference_code}</div></div><span className={`px-2 py-1 text-[10px] font-bold uppercase ${selected.status === 'confirmed' ? 'bg-emerald-100 text-emerald-800' : selected.status === 'completed' ? 'bg-sky-100 text-sky-800' : selected.status === 'cancelled' || selected.status === 'rejected' ? 'bg-rose-100 text-rose-800' : 'bg-amber-100 text-amber-800'}`}>{selected.status}</span></div>
                   <h2 className="mt-5 break-words text-xl font-bold">{selected.patient_name}</h2>
                   <p className="mt-1 break-words text-sm text-[#66736f]">{selected.service_name}</p>
                   <dl className="mt-6 space-y-4 border-y border-[#edf1ee] py-5 text-sm">
-                    <div><dt className="text-[11px] font-bold uppercase tracking-wide text-[#87938c]">Preferred appointment</dt><dd className="mt-1 font-medium">{selected.preferred_date} · {selected.preferred_time}</dd></div>
+                    <div><dt className="text-[11px] font-bold uppercase tracking-wide text-[#87938c]">Preferred appointment</dt><dd className="mt-1 font-medium">{selected.preferred_date} · {formatAppointmentTime(selected.preferred_time)}</dd></div>
+                    {selected.completed_at && <div><dt className="text-[11px] font-bold uppercase tracking-wide text-[#87938c]">Marked completed</dt><dd className="mt-1 font-medium">{new Intl.DateTimeFormat('en-US', { timeZone: 'Asia/Manila', dateStyle: 'medium', timeStyle: 'short' }).format(new Date(selected.completed_at))}</dd></div>}
                     <div><dt className="text-[11px] font-bold uppercase tracking-wide text-[#87938c]">Barangay</dt><dd className="mt-1 font-medium">{selected.zone}</dd></div>
                     <div><dt className="text-[11px] font-bold uppercase tracking-wide text-[#87938c]">Contact number</dt><dd className="mt-1 font-medium">{selected.phone}</dd></div>
                     {selected.email && <div><dt className="text-[11px] font-bold uppercase tracking-wide text-[#87938c]">Email</dt><dd className="mt-1 break-all font-medium">{selected.email}</dd></div>}
-                    {selected.missed_at && <div><dt className="text-[11px] font-bold uppercase tracking-wide text-[#87938c]">Marked missed</dt><dd className="mt-1 font-medium">{new Intl.DateTimeFormat('en-US', { timeZone: 'Asia/Manila', dateStyle: 'medium', timeStyle: 'short' }).format(new Date(selected.missed_at))}</dd></div>}
-                    {selected.age !== null && selected.age !== undefined && <div><dt className="text-[11px] font-bold uppercase tracking-wide text-[#87938c]">Age</dt><dd className="mt-1 font-medium">{selected.age}</dd></div>}
-                    {selected.address && <div><dt className="text-[11px] font-bold uppercase tracking-wide text-[#87938c]">Address</dt><dd className="mt-1 font-medium">{selected.address}</dd></div>}
-                    {selected.chief_complaint && <div><dt className="text-[11px] font-bold uppercase tracking-wide text-[#87938c]">Reason for visit</dt><dd className="mt-1 whitespace-pre-wrap font-medium">{selected.chief_complaint}</dd></div>}
-                    {selected.guardian_name && <div><dt className="text-[11px] font-bold uppercase tracking-wide text-[#87938c]">Parent / guardian</dt><dd className="mt-1 font-medium">{selected.guardian_name} ({selected.guardian_relationship})</dd></div>}
-                    {selected.priority_categories && <div><dt className="text-[11px] font-bold uppercase tracking-wide text-[#87938c]">Priority categories</dt><dd className="mt-1 font-medium">{selected.priority_categories.split(',').join(', ')}</dd></div>}
+                    {selected.address && <div><dt className="text-[11px] font-bold uppercase tracking-wide text-[#87938c]">Home address</dt><dd className="mt-1 whitespace-pre-wrap break-words font-medium">{selected.address}</dd></div>}
+                    {selected.age !== null && <div><dt className="text-[11px] font-bold uppercase tracking-wide text-[#87938c]">Age</dt><dd className="mt-1 font-medium">{selected.age}</dd></div>}
+                    {getPriorityCategoryLabels(selected.priority_categories ?? '').length > 0 && <div><dt className="text-[11px] font-bold uppercase tracking-wide text-[#87938c]">Priority categories</dt><dd className="mt-1 font-medium">{getPriorityCategoryLabels(selected.priority_categories ?? '').join(', ')}</dd></div>}
+                    {selected.chief_complaint && <div><dt className="text-[11px] font-bold uppercase tracking-wide text-[#87938c]">Health concern</dt><dd className="mt-1 whitespace-pre-wrap break-words font-medium">{selected.chief_complaint}</dd></div>}
                   </dl>
                   <div className="mt-5 grid gap-2">
                     <button type="button" disabled={selected.status !== 'pending'} onClick={() => void performAction('approve', selected)} className="flex min-h-11 items-center justify-center gap-2 bg-[#17645c] px-2 text-sm font-bold text-white hover:bg-[#104f49] disabled:cursor-not-allowed disabled:opacity-50"><Check className="h-4 w-4 shrink-0" />Accept request</button>
-                    <button type="button" disabled={['rejected', 'cancelled', 'completed', 'missed'].includes(selected.status)} onClick={() => void performAction('reject', selected)} className="flex min-h-11 items-center justify-center gap-2 border border-rose-200 px-2 text-sm font-bold text-rose-700 hover:bg-rose-50 disabled:cursor-not-allowed disabled:opacity-50"><X className="h-4 w-4 shrink-0" />Reject request</button>
                     {selected.status === 'confirmed' && <button type="button" onClick={() => void performAction('complete', selected)} className="flex min-h-11 items-center justify-center gap-2 border border-sky-200 px-2 text-sm font-bold text-sky-800 hover:bg-sky-50"><CheckCircle2 className="h-4 w-4 shrink-0" />Mark completed / remove from schedule</button>}
-                    {selected.status === 'confirmed' && <button type="button" onClick={() => void performAction('missed', selected)} className="flex min-h-11 items-center justify-center gap-2 border border-rose-200 px-2 text-sm font-bold text-rose-700 hover:bg-rose-50"><Clock3 className="h-4 w-4 shrink-0" />Mark appointment missed</button>}
-                    <button type="button" onClick={() => void performAction('delete_appointment', selected)} className="flex min-h-11 items-center justify-center gap-2 border border-rose-300 px-2 text-sm font-bold text-rose-800 hover:bg-rose-50"><Trash2 className="h-4 w-4 shrink-0" />Delete appointment record</button>
-                    {selected.status !== 'missed' && selected.chat_status !== 'deleted' && <button type="button" onClick={() => void performAction(selected.chat_status === 'closed' ? 'chat_open' : 'chat_close', selected)} className="flex min-h-11 items-center justify-center gap-2 border border-[#d9e1dc] px-2 text-sm font-bold hover:bg-[#f4f6f3]"><LockKeyhole className="h-4 w-4 shrink-0" />{selected.chat_status === 'closed' ? 'Open patient chat' : 'Close patient chat'}</button>}
+                    {selected.status !== 'completed' && selected.chat_status !== 'deleted' && <button type="button" onClick={() => void performAction(selected.chat_status === 'closed' ? 'chat_open' : 'chat_close', selected)} className="flex min-h-11 items-center justify-center gap-2 border border-[#d9e1dc] px-2 text-sm font-bold hover:bg-[#f4f6f3]"><LockKeyhole className="h-4 w-4 shrink-0" />{selected.chat_status === 'closed' ? 'Open patient chat' : 'Close patient chat'}</button>}
                   </div>
                 </div>
 
                 <div className="flex min-h-[380px] min-w-0 flex-col sm:min-h-[520px]">
                   <div className="flex min-w-0 items-center gap-2 border-b border-[#dfe6e1] bg-white px-3 py-3 sm:gap-3 sm:px-5 sm:py-4">
                     <div className="flex h-9 w-9 items-center justify-center bg-[#edf3ef] text-[#17645c]"><MessageCircle className="h-4 w-4" /></div>
-                    <div className="min-w-0"><h3 className="text-sm font-bold">Patient conversation</h3><p className="mt-0.5 text-[11px] text-[#66736f]">{selected.chat_status === 'deleted' ? 'Deleted for both accounts' : selected.status === 'missed' ? 'Chat closed for missed appointment' : selected.chat_status === 'closed' ? 'Open chat to send messages' : 'Chat is open with the patient'}</p></div>
+                    <div className="min-w-0"><h3 className="text-sm font-bold">Patient conversation</h3><p className="mt-0.5 text-[11px] text-[#66736f]">{selected.chat_status === 'deleted' ? 'Deleted for both accounts' : selected.status === 'completed' ? 'Chat closed for completed appointment' : selected.chat_status === 'closed' ? 'Open chat to send messages' : 'Chat is open with the patient'}</p></div>
                     {selected.chat_status !== 'deleted' && <button type="button" onClick={() => void performAction('delete_chat', selected)} className="ml-auto inline-flex items-center gap-1.5 border border-rose-200 px-3 py-2 text-xs font-bold text-rose-700 hover:bg-rose-50" title="Delete this chat for both accounts"><Trash2 className="h-4 w-4" /><span className="hidden sm:inline">Delete chat</span></button>}
                   </div>
                   <div className="min-h-0 flex-1 space-y-3 overflow-y-auto px-3 py-4 sm:px-5 sm:py-5">
@@ -375,7 +387,7 @@ export const AdminPanel: React.FC = () => {
                   </div>
                   {selected.chat_status === 'open' ? (
                     <form onSubmit={sendMessage} className="flex shrink-0 gap-2 border-t border-[#dfe6e1] bg-white p-2.5 sm:p-4"><input value={chatInput} onChange={(event) => setChatInput(event.target.value)} maxLength={2000} placeholder="Write a message to the patient..." className="h-11 min-w-0 flex-1 border border-[#d9e1dc] px-3 text-sm outline-none focus:border-[#17645c] sm:px-4" /><button type="submit" disabled={!chatInput.trim()} aria-label="Send message" className="flex h-11 w-11 shrink-0 items-center justify-center bg-[#17645c] text-white hover:bg-[#104f49] disabled:opacity-50"><Send className="h-4 w-4" /></button></form>
-                  ) : <div className="border-t border-[#dfe6e1] bg-white px-5 py-4 text-center text-xs text-[#66736f]">{selected.chat_status === 'deleted' ? 'This conversation has been deleted and cannot be reopened.' : 'This conversation is closed. Open patient chat to reply.'}</div>}
+                  ) : <div className="border-t border-[#dfe6e1] bg-white px-5 py-4 text-center text-xs text-[#66736f]">{selected.chat_status === 'deleted' ? 'This conversation has been deleted and cannot be reopened.' : selected.status === 'completed' ? 'This conversation is closed because the appointment is completed.' : 'This conversation is closed. Open patient chat to reply.'}</div>}
                 </div>
               </div>
             )}
@@ -384,7 +396,7 @@ export const AdminPanel: React.FC = () => {
         )}
         </div>
       </div>
-      {error && <div role="alert" className="fixed bottom-4 left-3 right-3 z-50 mx-auto w-fit max-w-lg border border-rose-200 bg-white px-4 py-3 text-sm text-rose-800 shadow-lg sm:left-1/2 sm:right-auto sm:-translate-x-1/2">{error}</div>}
+      {error && <div role="alert" className="fixed bottom-[max(0.75rem,env(safe-area-inset-bottom))] left-3 right-3 z-50 mx-auto w-fit max-w-lg border border-rose-200 bg-white px-4 py-3 text-sm text-rose-800 shadow-lg sm:bottom-4 sm:left-1/2 sm:right-auto sm:-translate-x-1/2">{error}</div>}
     </main>
   );
 };

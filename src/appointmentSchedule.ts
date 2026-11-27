@@ -35,12 +35,6 @@ export function getEarliestAppointmentDate(now = new Date()) {
   return tomorrow.toISOString().slice(0, 10);
 }
 
-export function getLatestAppointmentDate(now = new Date()) {
-  const latestDate = new Date(`${getManilaAppointmentClock(now).date}T12:00:00Z`);
-  latestDate.setUTCDate(latestDate.getUTCDate() + 30);
-  return latestDate.toISOString().slice(0, 10);
-}
-
 export function getAppointmentTimeMinutes(value: string) {
   const match = /^([01]\d|2[0-3]):([0-5]\d)$/.exec(value);
   return match ? Number(match[1]) * 60 + Number(match[2]) : null;
@@ -48,26 +42,24 @@ export function getAppointmentTimeMinutes(value: string) {
 
 export function isAppointmentTimeAvailable(date: string, time: string, now = new Date()) {
   const slotMinutes = getAppointmentTimeMinutes(time);
-  if (!APPOINTMENT_TIME_SLOTS.includes(time)
-    || slotMinutes === null
-    || date < getEarliestAppointmentDate(now)
-    || date > getLatestAppointmentDate(now)) return false;
+  if (!APPOINTMENT_TIME_SLOTS.includes(time) || slotMinutes === null || date < getEarliestAppointmentDate(now)) return false;
   const clock = getManilaAppointmentClock(now);
   return date !== clock.date || slotMinutes > clock.minutes;
 }
 
 export function getAppointmentTimePeriod(value: string) {
+  if (value === 'morning') return 'morning';
+  if (value === 'afternoon' || value === 'no preference') return 'afternoon';
   const minutes = getAppointmentTimeMinutes(value);
-  if (minutes !== null) return minutes < 12 * 60 ? 'morning' : 'afternoon';
-  return value === 'morning' ? 'morning' : 'afternoon';
+  return minutes !== null && minutes < 12 * 60 ? 'morning' : 'afternoon';
 }
 
 export function formatAppointmentTime(value: string) {
+  if (value === 'morning') return 'Morning';
+  if (value === 'afternoon') return 'Afternoon';
+  if (value === 'no preference') return 'Any time';
   const minutes = getAppointmentTimeMinutes(value);
-  if (minutes === null) {
-    if (value === 'no preference') return 'Any time';
-    return value.charAt(0).toUpperCase() + value.slice(1);
-  }
+  if (minutes === null) return value;
   const hour = Math.floor(minutes / 60);
   return `${hour % 12 || 12}:${String(minutes % 60).padStart(2, '0')} ${hour < 12 ? 'AM' : 'PM'}`;
 }

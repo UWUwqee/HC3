@@ -1,25 +1,20 @@
 import React, { useCallback, useState } from 'react';
-import { useClerk } from '@clerk/react';
 import { useHealthCenter } from '../context/HealthCenterContext';
-import { Menu, X, Globe, CalendarDays, LogOut, Mail, Accessibility } from 'lucide-react';
+import { Menu, X, LogIn, LogOut, Mail, Accessibility } from 'lucide-react';
+import { useAuth } from '@clerk/react';
 import { AccessibilityTools } from './AccessibilityTools';
 
 export const Header: React.FC = () => {
-  const { signOut } = useClerk();
+  const { signOut, isSignedIn } = useAuth();
   const {
-    t,
     language,
-    toggleLanguage,
     activeSection,
     setActiveSection,
-    setBookingModalOpen,
-    clinicOpen,
-    appointmentRequestAvailability,
+    setAuthModalOpen,
     setMessagesOpen,
     unreadAdminMessageCount,
     unreadMessagesError,
   } = useHealthCenter();
-  const bookingEnabled = appointmentRequestAvailability === 'available';
 
   const [mobileMenuOpen, setMobileMenuOpen] = useState(false);
   const [accessibilityOpen, setAccessibilityOpen] = useState(false);
@@ -41,15 +36,7 @@ export const Header: React.FC = () => {
   return (
     <header className="header-enter sticky top-0 z-40 border-b border-[#dce7e1] bg-white/95 backdrop-blur-md">
       <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
-        <div className="flex h-[68px] items-center justify-between gap-2 sm:gap-6">
-          <a
-            href="#overview"
-            onClick={(e) => { e.preventDefault(); handleNavClick('overview'); }}
-            className="flex min-w-0 shrink items-center gap-2 text-xs font-bold text-[#0f4d3c] transition-colors duration-200 hover:text-[#2c7a5f] sm:gap-3 sm:text-[15px]"
-          >
-            <span title={t.brand} className="min-w-0 truncate sm:overflow-visible sm:whitespace-nowrap">Masikap <span className="hidden sm:inline">Health Center</span></span>
-          </a>
-
+        <div className="flex h-[68px] items-center justify-between gap-2 sm:gap-5">
           <nav className="hidden xl:flex items-center gap-7 text-sm font-medium text-[#6b7280]">
             {navLinks.map((item) => (
               <button
@@ -71,24 +58,31 @@ export const Header: React.FC = () => {
               <Accessibility className="h-5 w-5" aria-hidden="true" />
             </button>
             <button
-              onClick={toggleLanguage}
-              className="flex min-h-9 items-center gap-1.5 px-2 text-[#4b5563] hover:text-[#0f4d3c] transition-colors cursor-pointer"
-              title="Toggle English / Filipino"
+              type="button"
+              onClick={() => setAccessibilityOpen(true)}
+              aria-label={language === 'fil' ? 'Mga setting ng accessibility' : 'Accessibility settings'}
+              aria-haspopup="dialog"
+              aria-expanded={accessibilityOpen}
+              className="flex min-h-11 items-center gap-2 rounded-md px-2 text-sm font-semibold text-[#4b5563] hover:bg-[#eaf3ee] hover:text-[#0f4d3c]"
             >
-              <Globe className="w-4 h-4" />
-              <span className="text-sm font-medium">{language === 'en' ? 'Filipino' : 'English'}</span>
+              <Accessibility className="h-5 w-5" aria-hidden="true" />
+              <span>{language === 'fil' ? 'Aksesibilidad' : 'Accessibility'}</span>
             </button>
-            {bookingEnabled && <button onClick={() => setBookingModalOpen(true)} title="Request an appointment" className="px-4 py-2.5 text-sm font-bold text-white bg-[#0f4d3c] hover:bg-[#2c7a5f] rounded-sm transition-colors whitespace-nowrap flex items-center gap-2">
-              <CalendarDays className="w-4 h-4" />
-              <span>REQUEST AN APPOINTMENT</span>
-            </button>}
-            <button type="button" onClick={() => setMessagesOpen(true)} className="relative p-2 text-[#4b5563] hover:bg-[#eaf3ee] hover:text-[#0f4d3c]" aria-label={`Messages${unreadAdminMessageCount > 0 ? `, ${unreadAdminMessageCount} unread` : ''}`} title={unreadMessagesError || (unreadAdminMessageCount > 0 ? `${unreadAdminMessageCount} unread message${unreadAdminMessageCount === 1 ? '' : 's'}` : 'Messages')}>
-              <Mail className="h-5 w-5" />
-              {unreadAdminMessageCount > 0 && <span aria-hidden="true" className="absolute -right-1 -top-1 flex h-5 min-w-5 items-center justify-center rounded-full bg-rose-600 px-1 text-[10px] font-bold leading-none text-white">{unreadAdminMessageCount > 99 ? '99+' : unreadAdminMessageCount}</span>}
-            </button>
-            <button type="button" onClick={() => void signOut()} className="p-2 text-[#4b5563] hover:text-[#0f4d3c]" aria-label="Sign out" title="Sign out">
-              <LogOut className="w-4 h-4" />
-            </button>
+            {isSignedIn ? (
+              <>
+                <button type="button" onClick={() => setMessagesOpen(true)} className="relative p-2 text-[#4b5563] hover:bg-[#eaf3ee] hover:text-[#0f4d3c]" aria-label={`Messages${unreadAdminMessageCount > 0 ? `, ${unreadAdminMessageCount} unread` : ''}`} title={unreadMessagesError || (unreadAdminMessageCount > 0 ? `${unreadAdminMessageCount} unread message${unreadAdminMessageCount === 1 ? '' : 's'}` : 'Messages')}>
+                  <Mail className="h-5 w-5" />
+                  {unreadAdminMessageCount > 0 && <span aria-hidden="true" className="absolute -right-1 -top-1 flex h-5 min-w-5 items-center justify-center rounded-full bg-rose-600 px-1 text-[10px] font-bold leading-none text-white">{unreadAdminMessageCount > 99 ? '99+' : unreadAdminMessageCount}</span>}
+                </button>
+                <button type="button" onClick={() => void signOut()} className="p-2 text-[#4b5563] hover:text-[#0f4d3c]" aria-label="Sign out" title="Sign out">
+                  <LogOut className="w-4 h-4" />
+                </button>
+              </>
+            ) : (
+              <button type="button" onClick={() => setAuthModalOpen(true)} className="flex min-h-11 items-center gap-2 rounded-md bg-[#0f4d3c] px-4 text-sm font-bold text-white hover:bg-[#2c7a5f]">
+                <LogIn className="h-4 w-4" />Log in
+              </button>
+            )}
           </div>
 
           <div className="flex items-center gap-1 xl:hidden sm:gap-2">
@@ -96,17 +90,23 @@ export const Header: React.FC = () => {
               <Accessibility className="h-5 w-5" aria-hidden="true" />
             </button>
             <button
-              onClick={toggleLanguage}
-              className="flex h-11 w-11 shrink-0 items-center justify-center text-[#4b5563] hover:text-[#0f4d3c] xl:hidden"
-              aria-label={language === 'en' ? 'Switch to Filipino' : 'Switch to English'}
-              title={language === 'en' ? 'Filipino' : 'English'}
+              type="button"
+              onClick={() => setAccessibilityOpen(true)}
+              aria-label={language === 'fil' ? 'Mga setting ng accessibility' : 'Accessibility settings'}
+              aria-haspopup="dialog"
+              aria-expanded={accessibilityOpen}
+              className="flex h-11 w-11 shrink-0 items-center justify-center rounded-md text-[#4b5563] hover:bg-[#eaf3ee] hover:text-[#0f4d3c]"
             >
-              <Globe className="w-5 h-5" />
+              <Accessibility className="h-5 w-5" aria-hidden="true" />
             </button>
-            <button type="button" onClick={() => setMessagesOpen(true)} className="relative flex h-11 w-11 shrink-0 items-center justify-center text-[#4b5563] hover:text-[#0f4d3c] xl:hidden" aria-label={`Messages${unreadAdminMessageCount > 0 ? `, ${unreadAdminMessageCount} unread` : ''}`} title={unreadMessagesError || (unreadAdminMessageCount > 0 ? `${unreadAdminMessageCount} unread message${unreadAdminMessageCount === 1 ? '' : 's'}` : 'Messages')}>
-              <Mail className="h-5 w-5" />
-              {unreadAdminMessageCount > 0 && <span aria-hidden="true" className="absolute right-0 top-0 flex h-5 min-w-5 items-center justify-center rounded-full bg-rose-600 px-1 text-[10px] font-bold leading-none text-white">{unreadAdminMessageCount > 99 ? '99+' : unreadAdminMessageCount}</span>}
-            </button>
+            {isSignedIn
+              ? <button type="button" onClick={() => setMessagesOpen(true)} className="relative flex h-11 w-11 shrink-0 items-center justify-center text-[#4b5563] hover:text-[#0f4d3c] xl:hidden" aria-label={`Messages${unreadAdminMessageCount > 0 ? `, ${unreadAdminMessageCount} unread` : ''}`} title={unreadMessagesError || (unreadAdminMessageCount > 0 ? `${unreadAdminMessageCount} unread message${unreadAdminMessageCount === 1 ? '' : 's'}` : 'Messages')}>
+                <Mail className="h-5 w-5" />
+                {unreadAdminMessageCount > 0 && <span aria-hidden="true" className="absolute right-0 top-0 flex h-5 min-w-5 items-center justify-center rounded-full bg-rose-600 px-1 text-[10px] font-bold leading-none text-white">{unreadAdminMessageCount > 99 ? '99+' : unreadAdminMessageCount}</span>}
+              </button>
+              : <button type="button" onClick={() => setAuthModalOpen(true)} className="flex min-h-11 items-center gap-2 rounded-md bg-[#0f4d3c] px-3 text-xs font-bold text-white hover:bg-[#2c7a5f] xl:hidden">
+                <LogIn className="h-4 w-4" />Log in
+              </button>}
             <button
               onClick={() => setMobileMenuOpen(!mobileMenuOpen)}
               className="flex h-11 w-11 shrink-0 items-center justify-center rounded-lg text-[#374151] hover:bg-[#eaf3ee] hover:text-[#0f4d3c]"
@@ -139,14 +139,10 @@ export const Header: React.FC = () => {
           </div>
 
           <div className="pt-3 border-t border-[#e7eee9]">
-            {bookingEnabled && <button onClick={() => { setBookingModalOpen(true); setMobileMenuOpen(false); }} className="min-h-11 w-full py-2.5 px-4 text-sm font-semibold text-white bg-[#0f4d3c] hover:bg-[#2c7a5f] rounded-md flex items-center justify-center gap-2">
-              <CalendarDays className="w-4 h-4" />
-              <span>REQUEST AN APPOINTMENT</span>
-            </button>}
-            <button type="button" onClick={() => void signOut()} className="mt-2 flex min-h-11 w-full items-center justify-center gap-2 rounded-md border border-[#dce7e1] px-4 text-sm font-semibold text-[#4b5563] hover:bg-[#f2f7f4]">
+            {isSignedIn && <button type="button" onClick={() => void signOut()} className="mt-2 flex min-h-11 w-full items-center justify-center gap-2 rounded-md border border-[#dce7e1] px-4 text-sm font-semibold text-[#4b5563] hover:bg-[#f2f7f4]">
               <LogOut className="h-4 w-4" />
               Sign out
-            </button>
+            </button>}
           </div>
         </div>
       )}

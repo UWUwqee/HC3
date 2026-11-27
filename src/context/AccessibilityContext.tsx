@@ -15,7 +15,7 @@ export interface AccessibilitySettings {
   reduceMotion: boolean;
 }
 
-const STORAGE_KEY = 'masikap-accessibility-settings';
+const STORAGE_KEY = 'masikap_accessibility';
 
 const defaultSettings: AccessibilitySettings = {
   profile: 'default',
@@ -54,19 +54,19 @@ function readSettings(): AccessibilitySettings {
       ...defaultSettings,
       profile: ['default', 'senior', 'visual', 'cognitive', 'motor', 'custom'].includes(String(value.profile))
         ? value.profile as AccessibilityProfile
-        : 'default',
+        : defaultSettings.profile,
       textScale: typeof value.textScale === 'number' && Number.isFinite(value.textScale)
         ? Math.min(1.6, Math.max(0.9, value.textScale))
-        : 1,
+        : defaultSettings.textScale,
       contrast: ['normal', 'high', 'smart'].includes(String(value.contrast))
         ? value.contrast as ContrastMode
-        : 'normal',
-      highlightLinks: typeof value.highlightLinks === 'boolean' ? value.highlightLinks : false,
-      textSpacing: typeof value.textSpacing === 'boolean' ? value.textSpacing : false,
-      dyslexiaFont: typeof value.dyslexiaFont === 'boolean' ? value.dyslexiaFont : false,
-      largeCursor: typeof value.largeCursor === 'boolean' ? value.largeCursor : false,
-      largeTouchTargets: typeof value.largeTouchTargets === 'boolean' ? value.largeTouchTargets : false,
-      reduceMotion: typeof value.reduceMotion === 'boolean' ? value.reduceMotion : false,
+        : defaultSettings.contrast,
+      highlightLinks: typeof value.highlightLinks === 'boolean' ? value.highlightLinks : defaultSettings.highlightLinks,
+      textSpacing: typeof value.textSpacing === 'boolean' ? value.textSpacing : defaultSettings.textSpacing,
+      dyslexiaFont: typeof value.dyslexiaFont === 'boolean' ? value.dyslexiaFont : defaultSettings.dyslexiaFont,
+      largeCursor: typeof value.largeCursor === 'boolean' ? value.largeCursor : defaultSettings.largeCursor,
+      largeTouchTargets: typeof value.largeTouchTargets === 'boolean' ? value.largeTouchTargets : defaultSettings.largeTouchTargets,
+      reduceMotion: typeof value.reduceMotion === 'boolean' ? value.reduceMotion : defaultSettings.reduceMotion,
     };
   } catch {
     return defaultSettings;
@@ -80,7 +80,7 @@ export const AccessibilityProvider: React.FC<{ children: React.ReactNode }> = ({
     try {
       localStorage.setItem(STORAGE_KEY, JSON.stringify(settings));
     } catch (error) {
-      console.error('Accessibility preferences could not be saved:', error);
+      console.error('Accessibility settings could not be saved:', error);
     }
     const root = document.documentElement;
     root.dataset.accessibilityContrast = settings.contrast;
@@ -90,18 +90,11 @@ export const AccessibilityProvider: React.FC<{ children: React.ReactNode }> = ({
     root.dataset.accessibilityLargeCursor = String(settings.largeCursor);
     root.dataset.accessibilityTouchTargets = String(settings.largeTouchTargets);
     root.dataset.accessibilityReduceMotion = String(settings.reduceMotion);
-    root.style.setProperty('--accessibility-font-size', `${settings.textScale * 100}%`);
+    root.style.setProperty('--accessibility-font-scale', String(settings.textScale));
   }, [settings]);
 
   const updateSettings = useCallback((patch: Partial<AccessibilitySettings>) => {
-    setSettings((current) => ({
-      ...current,
-      ...patch,
-      textScale: patch.textScale === undefined
-        ? current.textScale
-        : Math.min(1.6, Math.max(0.9, patch.textScale)),
-      profile: 'custom',
-    }));
+    setSettings((current) => ({ ...current, ...patch, profile: 'custom' }));
   }, []);
 
   const applyProfile = useCallback((profile: AccessibilityProfile) => {
@@ -114,9 +107,13 @@ export const AccessibilityProvider: React.FC<{ children: React.ReactNode }> = ({
   }, []);
 
   const resetSettings = useCallback(() => setSettings(defaultSettings), []);
-  const value = useMemo(() => ({ settings, updateSettings, applyProfile, resetSettings }), [
-    settings, updateSettings, applyProfile, resetSettings,
-  ]);
+
+  const value = useMemo(() => ({
+    settings,
+    updateSettings,
+    applyProfile,
+    resetSettings,
+  }), [settings, updateSettings, applyProfile, resetSettings]);
 
   return <AccessibilityContext.Provider value={value}>{children}</AccessibilityContext.Provider>;
 };

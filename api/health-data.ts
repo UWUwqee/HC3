@@ -2,9 +2,9 @@ import 'dotenv/config';
 import { createClient } from '@libsql/client';
 import { randomUUID } from 'node:crypto';
 import type { IncomingMessage, ServerResponse } from 'node:http';
-import { verifyToken } from '@clerk/backend';
+import { verifyClerkToken } from './clerk-auth.ts';
 
-type ApiRequest = IncomingMessage & { body?: unknown };
+type ApiRequest = IncomingMessage & { body?: unknown; headers: IncomingMessage['headers'] & { authorization?: string } };
 type ApiResponse = ServerResponse & {
   status: (code: number) => ApiResponse;
   json: (body: unknown) => void;
@@ -22,6 +22,19 @@ function getDatabase() {
 
 function text(value: unknown, limit: number) {
   return typeof value === 'string' ? value.trim().slice(0, limit) : '';
+}
+
+async function authenticate(request: ApiRequest) {
+  const authorization = text(request.headers.authorization, 2000);
+  const token = authorization.startsWith('Bearer ') ? authorization.slice(7) : '';
+  if (!token) return null;
+  try {
+    const decoded = await verifyClerkToken(token);
+    return decoded?.uid ?? null;
+  } catch (error) {
+    console.error('Health-data Clerk session verification failed:', error);
+    return null;
+  }
 }
 
 async function initializeDatabase(db: ReturnType<typeof createClient>) {
@@ -98,20 +111,12 @@ async function initializeDatabase(db: ReturnType<typeof createClient>) {
 
 export default async function handler(request: ApiRequest, response: ApiResponse) {
   response.setHeader('Cache-Control', 'no-store');
-  const authorization = request.headers.authorization;
-  const token = typeof authorization === 'string' && authorization.startsWith('Bearer ')
-    ? authorization.slice(7)
-    : '';
-  if (!token) return response.status(401).json({ error: 'Authentication is required.' });
-  const secretKey = process.env.CLERK_SECRET_KEY;
-  if (!secretKey) return response.status(503).json({ error: 'Clerk authentication is not configured.' });
-  let decoded: Awaited<ReturnType<typeof verifyToken>>;
-  try {
-    decoded = await verifyToken(token, { secretKey });
-  } catch (error) {
-    console.error('Health data Clerk session verification failed:', error);
-    return response.status(401).json({ error: 'Your Clerk sign-in could not be verified. Please sign in again.' });
+  if (request.method !== 'GET' && request.method !== 'POST') {
+    response.setHeader('Allow', 'GET, POST');
+    return response.status(405).json({ error: 'Method not allowed.' });
   }
+  const ownerUid = await authenticate(request);
+  if (!ownerUid) return response.status(401).json({ error: 'A valid Clerk sign-in is required.' });
 
   const db = getDatabase();
   if (!db) return response.status(503).json({ error: 'Turso database is not configured.' });
@@ -121,8 +126,6 @@ export default async function handler(request: ApiRequest, response: ApiResponse
   } catch {
     return response.status(500).json({ error: 'Database initialization failed.' });
   }
-
-  const ownerUid = decoded.sub;
 
   if (request.method === 'GET') {
     const resource = text(request.headers['x-resource'], 40);
